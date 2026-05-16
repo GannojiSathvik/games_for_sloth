@@ -67,7 +67,21 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
   const scaleSide = winnerIdx === -1 ? null : winnerIdx < sortedBreakdown.length / 2 ? "left" : "right";
 
   return (
-    <main className="relative flex min-h-screen flex-col items-center bg-black text-white overflow-x-hidden">
+    <main className="relative flex min-h-screen flex-col items-center text-white overflow-x-hidden">
+      {/* ── Full-page video background ──────────────────────────────────────── */}
+      {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+      <video
+        autoPlay
+        loop
+        muted
+        playsInline
+        className="fixed inset-0 w-full h-full object-cover z-0 pointer-events-none"
+        style={{ filter: 'brightness(0.45)' }}
+      >
+        <source src="/bg-video.mp4" type="video/mp4" />
+      </video>
+      {/* Dark overlay on top of video for legibility */}
+      <div className="fixed inset-0 z-[1] bg-black/40 pointer-events-none" />
       <RoomPoller intervalMs={2000} />
 
       {/* ── Client-side overlays (elimination, rule announcement, game clear) ── */}
@@ -108,11 +122,7 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
         </div>
       </nav>
 
-      {/* ── Ambient glow ───────────────────────────────────────────────────── */}
-      <div aria-hidden className="pointer-events-none fixed inset-0">
-        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[600px] w-[600px] rounded-full bg-red-600/10 blur-[150px]" />
-        <div className="absolute top-0 right-0 h-[300px] w-[300px] rounded-full bg-yellow-500/5 blur-[120px]" />
-      </div>
+
 
       <div className="z-10 w-full max-w-5xl grid grid-cols-1 lg:grid-cols-3 gap-6 py-10 px-4">
 

@@ -3,7 +3,7 @@
 // Reads room state changes and shows EliminationOverlay and RuleAnnouncement
 // based on props passed down from the server component.
 
-import { useState, useEffect, useRef, memo } from "react";
+import { useState, useEffect, useRef, memo, useCallback } from "react";
 import EliminationOverlay from "./EliminationOverlay";
 import RuleAnnouncement   from "./RuleAnnouncement";
 import GameClearScreen    from "./GameClearScreen";
@@ -55,12 +55,14 @@ export default memo(function GameOverlays({
     }
   }, [isRuleIntroRound, newRuleId]);
 
+  const handleElimDismiss = useCallback(() => setShowElim(false), []);
+
   return (
     <>
       {showElim && newlyEliminated.length > 0 && (
         <EliminationOverlay
           eliminated={newlyEliminated}
-          onDismiss={() => setShowElim(false)}
+          onDismiss={handleElimDismiss}
         />
       )}
 
