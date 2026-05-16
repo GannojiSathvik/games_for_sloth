@@ -18,6 +18,8 @@ import ResultTimer from "@/components/game/ResultTimer";
 import GameOverRedirect from "@/components/game/GameOverRedirect";
 import AddBotsButton from "@/components/game/AddBotsButton";
 import RulesPanel from "@/components/game/RulesPanel";
+import BalanceScale from "@/components/game/BalanceScale";
+import GameOverlays from "@/components/game/GameOverlays";
 
 export default async function RoomPage({ params }: { params: Promise<{ roomId: string }> }) {
   const { roomId } = await params;
@@ -47,9 +49,38 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
   const isRuleIntroRound = !!currentRound?.submissionDeadline &&
     (new Date(currentRound.submissionDeadline).getTime() - currentRound.createdAt.getTime()) > 3 * 60 * 1000;
 
+  // Derive the newest unlocked rule (last element of activeRules)
+  const newRuleId = isRuleIntroRound && activeRules.length > 0
+    ? activeRules[activeRules.length - 1]
+    : null;
+
+  // Overlay props
+  const newlyEliminated = players
+    .filter(p => p.isEliminated)
+    .map(p => ({ username: p.username, score: p.score }));
+
+  // Balance scale winner side: based on winner position in sorted breakdown
+  const sortedBreakdown = currentResult
+    ? [...currentResult.breakdown].sort((a, b) => (b.scoreDelta ?? 0) - (a.scoreDelta ?? 0))
+    : [];
+  const winnerIdx = sortedBreakdown.findIndex(r => r.isWinner);
+  const scaleSide = winnerIdx === -1 ? null : winnerIdx < sortedBreakdown.length / 2 ? "left" : "right";
+
   return (
     <main className="relative flex min-h-screen flex-col items-center bg-black text-white overflow-x-hidden">
       <RoomPoller intervalMs={2000} />
+
+      {/* ── Client-side overlays (elimination, rule announcement, game clear) ── */}
+      <GameOverlays
+        newlyEliminated={newlyEliminated}
+        newRuleId={newRuleId}
+        deadlineIso={currentRound?.submissionDeadline?.toISOString() ?? null}
+        isRuleIntroRound={isRuleIntroRound}
+        isFinished={room.status === "finished"}
+        winnerUsername={winner?.username ?? null}
+        winnerScore={winner?.score ?? null}
+        isWinnerMe={winner?.userId === session.userId}
+      />
       {room.status === "active" && currentRound?.submissionDeadline && (
         <RoundBanner
           roundNumber={room.currentRound}
@@ -109,18 +140,19 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
             </div>
           </div>
 
-          {/* ══ RESULTS PANEL (shown for 5s before next round starts) ═══════ */}
+          {/* ══ RESULTS PANEL ════════════════════════════════════════════════ */}
           {showingResults && currentResult && (
-            <div className="rounded-xl border border-yellow-500/20 bg-zinc-900/80 backdrop-blur p-5 space-y-4">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <p className="text-base font-bold text-white">
-                  ♦ Round {currentResult.roundNumber} Results
-                </p>
-                <div className="flex gap-4 text-xs">
-                  <span className="text-zinc-500">Average: <strong className="text-white">{currentResult.averageGuess?.toFixed(2) ?? "—"}</strong></span>
-                  <span className="text-zinc-500">Target: <strong className="text-red-400">{currentResult.targetNumber?.toFixed(2) ?? "—"}</strong></span>
-                  <span className="text-zinc-700">(avg × 0.8)</span>
+            <div className="rounded-xl border border-yellow-500/20 bg-zinc-900/80 backdrop-blur p-5 space-y-5">
+              {/* Header: stats + balance scale */}
+              <div className="flex items-center justify-between flex-wrap gap-4">
+                <div>
+                  <p className="text-base font-bold text-white">♦ Round {currentResult.roundNumber} Results</p>
+                  <div className="flex gap-4 text-xs mt-1">
+                    <span className="text-zinc-500">Average: <strong className="text-white">{currentResult.averageGuess?.toFixed(2) ?? "—"}</strong></span>
+                    <span className="text-zinc-500">Target (×0.8): <strong className="text-red-400">{currentResult.targetNumber?.toFixed(2) ?? "—"}</strong></span>
+                  </div>
                 </div>
+                <BalanceScale winnerSide={scaleSide as "left" | "right" | null} />
               </div>
 
               {/* Triggered rules banner */}
@@ -129,43 +161,47 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
                   {currentResult.triggeredRules.map(r => (
                     <span key={r} className="text-xs px-2 py-1 rounded-full border bg-orange-950/40 border-orange-500/30 text-orange-300 font-semibold">
                       {r === "duplicate_guard" && "⚠️ Rule 1 Triggered: Duplicates Invalidated"}
-                      {r === "exact_penalty" && "💥 Rule 2 Triggered: Double Penalty"}
-                      {r === "zero_hundred" && "⚔️ Rule 3 Triggered: Zero / Hundred Override"}
+                      {r === "exact_penalty"   && "💥 Rule 2 Triggered: Double Penalty"}
+                      {r === "zero_hundred"    && "⚔️ Rule 3 Triggered: Zero / Hundred Override"}
                     </span>
                   ))}
                 </div>
               )}
 
-              {/* Per-player breakdown */}
-              <div className="space-y-1.5">
-                {[...currentResult.breakdown]
-                  .sort((a, b) => (b.scoreDelta ?? 0) - (a.scoreDelta ?? 0))
-                  .map(row => (
-                    <div key={row.playerId}
-                      className={`flex items-center gap-2 sm:gap-4 rounded-lg px-3 py-2.5 text-sm border
-                        ${row.isWinner ? "bg-yellow-950/40 border-yellow-500/30" : "bg-zinc-950/60 border-white/5"}
-                        ${row.isDuplicatePenalty ? "border-orange-500/20 bg-orange-950/20" : ""}`}>
-                      <span className={`flex-1 font-semibold truncate ${row.isWinner ? "text-yellow-300" : "text-zinc-300"}`}>
-                        {row.username}
-                        {row.isExactMatch && <span className="ml-2 text-xs bg-yellow-500 text-black px-1.5 py-0.5 rounded font-bold">EXACT</span>}
-                        {row.isDuplicatePenalty && <span className="ml-2 text-xs bg-orange-500/20 text-orange-400 border border-orange-500/30 px-1.5 py-0.5 rounded font-bold">DUPLICATE</span>}
-                        {row.isWinner && !row.isExactMatch && !row.isDuplicatePenalty && <span className="ml-2 text-xs text-emerald-400">👑 Closest</span>}
-                      </span>
-                      <span className="font-mono text-sm font-bold text-zinc-300 min-w-[2rem] text-center">
-                        {row.value < 0 ? <span className="text-zinc-600 text-xs">skipped</span> : row.value}
-                      </span>
-                      <span className="font-mono text-xs text-zinc-600 hidden sm:block min-w-[4rem] text-right">
-                        Δ {row.value >= 0 && row.deviation != null ? row.deviation.toFixed(2) : "—"}
-                      </span>
-                      <span className={`font-black font-mono text-base min-w-[3.5rem] text-right
-                        ${(row.scoreDelta ?? 0) > 0 ? "text-emerald-400" : (row.scoreDelta ?? 0) === 0 ? "text-zinc-400" : "text-red-400"}`}>
-                        {(row.scoreDelta ?? 0) > 0 ? `+${row.scoreDelta}` : row.scoreDelta === 0 ? "±0" : row.scoreDelta}
-                      </span>
+              {/* Animated player cards */}
+              <div className="space-y-2">
+                {sortedBreakdown.map((row, idx) => (
+                  <div key={row.playerId}
+                    className={`kod-card-enter ${row.isWinner ? "winner" : ""} flex items-center gap-2 sm:gap-4 rounded-xl px-3 py-3 text-sm border
+                      ${row.isWinner ? "bg-yellow-950/40 border-yellow-500/40 shadow-[0_0_20px_rgba(234,179,8,0.15)]" : "bg-zinc-950/60 border-white/5"}
+                      ${row.isDuplicatePenalty ? "border-orange-500/20 bg-orange-950/20" : ""}`}
+                    style={{ animationDelay: `${idx * 120}ms` }}>
+                    {/* Avatar */}
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-black flex-shrink-0
+                      ${row.isWinner ? "bg-yellow-500/30 text-yellow-300" : "bg-zinc-800 text-zinc-400"}`}>
+                      {row.username?.[0]?.toUpperCase() ?? "?"}
                     </div>
-                  ))}
+                    <span className={`flex-1 font-semibold truncate ${row.isWinner ? "text-yellow-300" : "text-zinc-300"}`}>
+                      {row.username}
+                      {row.isExactMatch    && <span className="ml-2 text-xs bg-yellow-500 text-black px-1.5 py-0.5 rounded font-bold">EXACT</span>}
+                      {row.isDuplicatePenalty && <span className="ml-2 text-xs bg-orange-500/20 text-orange-400 border border-orange-500/30 px-1.5 py-0.5 rounded font-bold">DUPLICATE</span>}
+                      {row.isWinner && !row.isExactMatch && !row.isDuplicatePenalty && <span className="ml-2 text-xs text-emerald-400">👑 Closest</span>}
+                    </span>
+                    <span className="font-mono text-sm font-bold text-zinc-300 min-w-[2.5rem] text-center">
+                      {row.value < 0 ? <span className="text-zinc-600 text-xs">skip</span> : row.value}
+                    </span>
+                    <span className="font-mono text-xs text-zinc-600 hidden sm:block min-w-[4rem] text-right">
+                      Δ {row.value >= 0 && row.deviation != null ? row.deviation.toFixed(2) : "—"}
+                    </span>
+                    <span className={`font-black font-mono text-base min-w-[3.5rem] text-right
+                      ${(row.scoreDelta ?? 0) > 0 ? "text-emerald-400" : (row.scoreDelta ?? 0) === 0 ? "text-zinc-400" : "text-red-400"}`}>
+                      {(row.scoreDelta ?? 0) > 0 ? `+${row.scoreDelta}` : row.scoreDelta === 0 ? "±0" : row.scoreDelta}
+                    </span>
+                  </div>
+                ))}
               </div>
 
-              <p className="text-xs text-zinc-700">Winner ±0 · Loser −1 · Exact match (Rule 2) loser −2 · Duplicate (Rule 1) −1 · Skip −1 · 3 skips = eliminated</p>
+              <p className="text-xs text-zinc-700">Winner ±0 · Loser −1 · Exact match (Rule 2) −2 · Duplicate (Rule 1) −1 · Skip −1 · 3 skips = eliminated</p>
 
               {currentResult.resolvedAt && (
                 <ResultTimer resolvedAt={currentResult.resolvedAt.toISOString()} roomId={roomId} resultDisplayMs={20000} />
@@ -342,22 +378,7 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
                 </div>
               )}
 
-              {room.status === "finished" && winner && (
-                <div className="flex flex-col items-center py-10 text-center">
-                  <GameOverRedirect delayMs={8000} />
-                  <div className="text-8xl mb-5 drop-shadow-[0_0_30px_rgba(250,204,21,0.5)] animate-bounce">👑</div>
-                  <h2 className={`text-4xl font-black bg-clip-text text-transparent bg-gradient-to-r mb-2
-                    ${winner.userId === session.userId ? "from-yellow-200 to-yellow-500" : "from-zinc-200 to-zinc-400"}`}>
-                    {winner.userId === session.userId ? "You Win! 🎉" : `${winner.username} Wins!`}
-                  </h2>
-                  <p className="text-zinc-400 mt-2 max-w-sm">
-                    {winner.userId === session.userId ? "Last one standing. Well played!" : `${winner.username} outlasted everyone.`}
-                  </p>
-                  <Link href="/" className="mt-6">
-                    <Button variant="outline" className="border-white/20 hover:bg-white hover:text-black px-8">Go Home Now</Button>
-                  </Link>
-                </div>
-              )}
+              {/* ════ FINISHED — now handled by GameClearScreen overlay ═══ */}
               {room.status === "finished" && !winner && (
                 <div className="flex flex-col items-center py-10 text-center text-zinc-500">
                   <GameOverRedirect delayMs={8000} />
@@ -365,6 +386,12 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
                   <Link href="/" className="mt-6">
                     <Button variant="outline" className="border-white/20 text-white hover:bg-white hover:text-black">Go Home Now</Button>
                   </Link>
+                </div>
+              )}
+              {room.status === "finished" && winner && (
+                <div className="flex flex-col items-center py-6 text-center">
+                  <GameOverRedirect delayMs={12000} />
+                  <p className="text-zinc-600 text-sm">Victory screen loading…</p>
                 </div>
               )}
 

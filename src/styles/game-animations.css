@@ -1,0 +1,168 @@
+/* ============================================================
+   KING OF DIAMONDS — GPU-ACCELERATED GAME ANIMATIONS
+   All animations use only transform + opacity for 60 FPS.
+   ============================================================ */
+
+/* ── Results: Player cards slide in ──────────────────────── */
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-120px) translateZ(0); }
+  to   { opacity: 1; transform: translateX(0)      translateZ(0); }
+}
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(120px)  translateZ(0); }
+  to   { opacity: 1; transform: translateX(0)      translateZ(0); }
+}
+@keyframes slideInUp {
+  from { opacity: 0; transform: translateY(40px) translateZ(0); }
+  to   { opacity: 1; transform: translateY(0)    translateZ(0); }
+}
+
+.kod-card-enter {
+  animation: slideInLeft 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  will-change: transform, opacity;
+  transform: translateZ(0);
+}
+.kod-card-enter.winner {
+  animation-name: slideInRight;
+}
+
+/* ── Elimination: acid pour + player fade ────────────────── */
+@keyframes acidPour {
+  0%   { opacity: 0; transform: scaleY(0)   translateY(-60px) translateZ(0); }
+  8%   { opacity: 1; }
+  100% { opacity: 1; transform: scaleY(1)   translateY(0)     translateZ(0); }
+}
+@keyframes acidDrop {
+  0%   { opacity: 0; transform: translateY(-40px) translateZ(0); }
+  12%  { opacity: 1; }
+  100% { opacity: 0; transform: translateY(180px) translateZ(0); }
+}
+@keyframes playerFade {
+  0%   { opacity: 1; transform: scale(1)   translateZ(0); }
+  40%  { opacity: 0.6; transform: scale(0.96) translateZ(0); }
+  100% { opacity: 0; transform: scale(0.8)   translateZ(0); }
+}
+@keyframes acidGlow {
+  0%, 100% { filter: drop-shadow(0 0 8px rgba(200,255,0,0.6)); }
+  50%       { filter: drop-shadow(0 0 20px rgba(200,255,0,1)); }
+}
+
+.kod-acid-container {
+  animation: acidPour 2.2s ease-in forwards;
+  transform-origin: top center;
+  will-change: transform, opacity;
+}
+.kod-acid-drop {
+  animation: acidDrop 1.4s ease-in infinite;
+  will-change: transform, opacity;
+}
+.kod-player-fade {
+  animation: playerFade 2s ease-in forwards;
+  will-change: transform, opacity;
+}
+.kod-acid-glow {
+  animation: acidGlow 1s ease-in-out infinite;
+}
+
+/* ── Balance scale ───────────────────────────────────────── */
+@keyframes tipLeft {
+  from { transform: rotateZ(0deg); }
+  to   { transform: rotateZ(-32deg); }
+}
+@keyframes tipRight {
+  from { transform: rotateZ(0deg); }
+  to   { transform: rotateZ(32deg); }
+}
+@keyframes scalePivotPulse {
+  0%, 100% { opacity: 1; transform: scale(1)    translateZ(0); }
+  50%       { opacity: 0.7; transform: scale(1.08) translateZ(0); }
+}
+
+.kod-scale-left  { transform-origin: 150px 50px; will-change: transform; }
+.kod-scale-right { transform-origin: 150px 50px; will-change: transform; }
+.kod-scale-left.tipping  { animation: tipLeft  1.4s cubic-bezier(0.34,1.2,0.64,1) forwards; }
+.kod-scale-right.tipping { animation: tipRight 1.4s cubic-bezier(0.34,1.2,0.64,1) forwards; }
+.kod-scale-pivot { animation: scalePivotPulse 0.5s ease-in-out 4; }
+
+/* ── Countdown timer ─────────────────────────────────────── */
+@keyframes timerPulseNormal {
+  0%, 100% { transform: scale(1)    translateZ(0); }
+  50%       { transform: scale(1.04) translateZ(0); }
+}
+@keyframes timerDangerFlash {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+.kod-timer-normal  { animation: timerPulseNormal  1.8s ease-in-out infinite; will-change: transform; }
+.kod-timer-warning { animation: timerDangerFlash  0.7s ease-in-out infinite; will-change: opacity; }
+.kod-timer-danger  { animation: timerDangerFlash  0.35s ease-in-out infinite; will-change: opacity; }
+
+/* ── Number pad ripple ───────────────────────────────────── */
+@keyframes kodRipple {
+  0%   { box-shadow: 0 0 0 0   rgba(220, 38, 38, 0.85); }
+  65%  { box-shadow: 0 0 0 18px rgba(220, 38, 38, 0); }
+  100% { box-shadow: 0 0 0 0   rgba(220, 38, 38, 0); }
+}
+
+.kod-btn-ripple { animation: kodRipple 0.5s ease-out; }
+
+/* ── Rule announcement ───────────────────────────────────── */
+@keyframes ruleSlideIn {
+  from { opacity: 0; transform: translateY(-60px) scaleY(0.85) translateZ(0); }
+  to   { opacity: 1; transform: translateY(0)     scaleY(1)    translateZ(0); }
+}
+@keyframes ruleBorderPulse {
+  0%, 100% { box-shadow: 0 0 20px rgba(255,215,0,0.25), inset 0 0 20px rgba(255,215,0,0.05); }
+  50%       { box-shadow: 0 0 50px rgba(255,215,0,0.6),  inset 0 0 30px rgba(255,215,0,0.1);  }
+}
+
+.kod-rule-panel {
+  animation: ruleSlideIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards,
+             ruleBorderPulse 2.5s ease-in-out 0.6s infinite;
+  will-change: transform, opacity;
+}
+
+/* ── Game Clear: confetti + gold glow ────────────────────── */
+@keyframes confettiFall {
+  0%   { opacity: 1; transform: translateY(-80px) rotateZ(0deg)   translateZ(0); }
+  100% { opacity: 0; transform: translateY(600px) rotateZ(720deg) translateZ(0); }
+}
+@keyframes goldTextGlow {
+  0%, 100% { text-shadow: 0 0 12px rgba(255,215,0,0.5); }
+  50%       { text-shadow: 0 0 40px rgba(255,215,0,1), 0 0 80px rgba(255,180,0,0.6); }
+}
+@keyframes victoryScale {
+  0%   { opacity: 0; transform: scale(0.6) translateZ(0); }
+  60%  { opacity: 1; transform: scale(1.08) translateZ(0); }
+  100% { opacity: 1; transform: scale(1)    translateZ(0); }
+}
+
+.kod-confetti-particle {
+  position: fixed;
+  width: 10px;
+  height: 10px;
+  pointer-events: none;
+  z-index: 9999;
+  animation: confettiFall 3s ease-in forwards;
+  will-change: transform, opacity;
+}
+.kod-gold-text  { animation: goldTextGlow 2s ease-in-out infinite; }
+.kod-victory-in { animation: victoryScale 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; will-change: transform, opacity; }
+
+/* ── Score health bar (acid fill) ────────────────────────── */
+@keyframes healthBarFill {
+  from { width: 0%; }
+  to   { width: var(--health-pct); }
+}
+.kod-health-fill {
+  animation: healthBarFill 0.6s ease-out forwards;
+  will-change: width;
+}
+
+/* ── Misc: fade in ───────────────────────────────────────── */
+@keyframes kodFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.kod-fade-in { animation: kodFadeIn 0.4s ease-out forwards; }
