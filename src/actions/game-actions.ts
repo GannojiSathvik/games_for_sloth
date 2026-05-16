@@ -2,7 +2,7 @@
 
 import { db } from "@/db";
 import { gameRooms, players, rounds, guesses, users } from "@/db/schema";
-import { calculateRound } from "@/lib/game-engine";
+import { calculateRound, computeActiveRules } from "@/lib/game-engine";
 import { eq, and, sql, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { nanoid } from "nanoid";
@@ -214,7 +214,7 @@ export async function resolveRound(roundId: string) {
   const allGuesses = await db.select({ id: guesses.id, playerId: guesses.playerId, value: guesses.value })
     .from(guesses).where(eq(guesses.roundId, roundId));
 
-  const validGuesses  = allGuesses.filter(g => g.value >= 0);
+  const validGuesses   = allGuesses.filter(g => g.value >= 0);
   const skippedGuesses = allGuesses.filter(g => g.value < 0);
 
   // -1 penalty + tag for skipped
@@ -225,18 +225,30 @@ export async function resolveRound(roundId: string) {
   }
 
   if (validGuesses.length > 0) {
-    const result = calculateRound(validGuesses.map(g => ({ playerId: g.playerId, value: g.value })));
+    // Pass active rules so the engine can apply progressive difficulty
+    const activeRules = (room.activeRules ?? []) as string[];
+    const result = calculateRound(
+      validGuesses.map(g => ({ playerId: g.playerId, value: g.value })),
+      activeRules,
+    );
+
     await db.update(rounds).set({
-      targetNumber: result.targetNumber, averageGuess: result.averageGuess,
-      status: "completed", resolvedAt: new Date(),
+      targetNumber: result.targetNumber,
+      averageGuess: result.averageGuess,
+      triggeredRules: result.triggeredRules,
+      status: "completed",
+      resolvedAt: new Date(),
     }).where(eq(rounds.id, roundId));
 
     const bMap = new Map(result.breakdown.map(b => [b.playerId, b]));
     for (const g of validGuesses) {
       const bd = bMap.get(g.playerId);
       if (bd) await db.update(guesses).set({
-        deviation: bd.deviation, scoreDelta: bd.scoreDelta,
-        isRoundWinner: bd.isWinner, isExactMatch: bd.isExactMatch,
+        deviation:          bd.deviation,
+        scoreDelta:         bd.scoreDelta,
+        isRoundWinner:      bd.isWinner,
+        isExactMatch:       bd.isExactMatch,
+        isDuplicatePenalty: bd.isDuplicatePenalty,
       }).where(eq(guesses.id, g.id));
     }
     for (const bd of result.breakdown)
@@ -279,16 +291,19 @@ export async function advanceRound(roomId: string) {
     .orderBy(desc(rounds.roundNumber))
     .limit(SKIP_LIMIT);
 
+  let newEliminationsCount = 0;
+
   for (const p of allPlayers) {
     let consecutiveSkips = 0;
     for (const r of recentRounds) {
       const [g] = await db.select({ value: guesses.value }).from(guesses)
         .where(and(eq(guesses.roundId, r.id), eq(guesses.playerId, p.id))).limit(1);
       if (!g || g.value < 0) consecutiveSkips++;
-      else break; // stop counting — not consecutive
+      else break;
     }
     if (consecutiveSkips >= SKIP_LIMIT) {
       await db.update(players).set({ isEliminated: true }).where(eq(players.id, p.id));
+      newEliminationsCount++;
     }
   }
 
@@ -300,13 +315,24 @@ export async function advanceRound(roomId: string) {
   for (const p of toEliminate)
     await db.update(players).set({ isEliminated: true }).where(eq(players.id, p.id));
 
+  newEliminationsCount += toEliminate.length;
+
+  // ── Update elimination count + unlock progressive rules ───────────────────
+  const totalEliminations = (room.eliminationCount ?? 0) + newEliminationsCount;
+  const newActiveRules = computeActiveRules(totalEliminations);
+
   const remaining = stillActive.filter(p => !toEliminate.find(e => e.id === p.id));
 
   // ── Game over? ────────────────────────────────────────────────────────────
   if (remaining.length <= 1) {
     if (remaining.length === 1)
       await db.update(players).set({ isWinner: true }).where(eq(players.id, remaining[0].id));
-    await db.update(gameRooms).set({ status: "finished", updatedAt: new Date() }).where(eq(gameRooms.id, roomId));
+    await db.update(gameRooms).set({
+      status: "finished",
+      eliminationCount: totalEliminations,
+      activeRules: newActiveRules,
+      updatedAt: new Date(),
+    }).where(eq(gameRooms.id, roomId));
     revalidatePath(`/room/${roomId}`);
     return;
   }
@@ -336,9 +362,9 @@ export async function advanceRound(roomId: string) {
 
   const newRound = inserted[0];
 
-  // Only update currentRound AFTER the round is safely in the DB
+  // Update currentRound AND the progressive rule state
   await db.update(gameRooms)
-    .set({ currentRound: nextRound, updatedAt: new Date() })
+    .set({ currentRound: nextRound, eliminationCount: totalEliminations, activeRules: newActiveRules, updatedAt: new Date() })
     .where(eq(gameRooms.id, roomId));
 
   await submitAIGuessesForRound(newRound.id, roomId);
@@ -396,10 +422,11 @@ export async function getRoomState(roomId: string) {
   let currentResult: {
     targetNumber: number | null; averageGuess: number | null; roundNumber: number;
     resolvedAt: Date | null;
+    triggeredRules: string[];
     breakdown: Array<{
       playerId: string; username: string; value: number;
       deviation: number | null; scoreDelta: number | null;
-      isWinner: boolean; isExactMatch: boolean;
+      isWinner: boolean; isExactMatch: boolean; isDuplicatePenalty: boolean;
     }>;
   } | null = null;
 
@@ -408,6 +435,7 @@ export async function getRoomState(roomId: string) {
       playerId: guesses.playerId, value: guesses.value,
       deviation: guesses.deviation, scoreDelta: guesses.scoreDelta,
       isWinner: guesses.isRoundWinner, isExact: guesses.isExactMatch,
+      isDuplicatePenalty: guesses.isDuplicatePenalty,
       username: users.username,
     }).from(guesses)
       .innerJoin(players, eq(guesses.playerId, players.id))
@@ -419,10 +447,12 @@ export async function getRoomState(roomId: string) {
       averageGuess: currentRound.averageGuess,
       roundNumber: currentRound.roundNumber,
       resolvedAt: currentRound.resolvedAt,
+      triggeredRules: (currentRound.triggeredRules ?? []) as string[],
       breakdown: gRows.map(g => ({
         playerId: g.playerId, username: g.username, value: g.value,
         deviation: g.deviation, scoreDelta: g.scoreDelta,
         isWinner: g.isWinner, isExactMatch: g.isExact,
+        isDuplicatePenalty: g.isDuplicatePenalty,
       })),
     };
   }

@@ -13,8 +13,9 @@ import {
   pgEnum,
   uniqueIndex,
   index,
+  jsonb,
 } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ENUMS
@@ -66,6 +67,10 @@ export const gameRooms = pgTable("game_rooms", {
   /** Round duration in seconds */
   roundDuration: integer("round_duration").notNull().default(60),
   currentRound: integer("current_round").notNull().default(0),
+  /** Total players eliminated across the whole game — drives progressive rule unlocks */
+  eliminationCount: integer("elimination_count").notNull().default(0),
+  /** Progressive rules active this game, e.g. ["duplicate_guard","exact_penalty"] */
+  activeRules: jsonb("active_rules").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
@@ -138,6 +143,8 @@ export const rounds = pgTable(
     averageGuess: real("average_guess"),
     /** Unix-ms when the submission window expires */
     submissionDeadline: timestamp("submission_deadline", { withTimezone: true }),
+    /** Which progressive rules fired this round, e.g. ["duplicate_guard"] */
+    triggeredRules: jsonb("triggered_rules").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     resolvedAt: timestamp("resolved_at", { withTimezone: true }),
   },
@@ -178,6 +185,8 @@ export const guesses = pgTable(
     isRoundWinner: boolean("is_round_winner").notNull().default(false),
     /** True if this player hit the exact target */
     isExactMatch: boolean("is_exact_match").notNull().default(false),
+    /** True if Rule 1 (duplicate_guard) applied an extra -1 to this player */
+    isDuplicatePenalty: boolean("is_duplicate_penalty").notNull().default(false),
     submittedAt: timestamp("submitted_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
