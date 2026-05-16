@@ -225,11 +225,11 @@ export async function resolveRound(roundId: string) {
   }
 
   if (validGuesses.length > 0) {
-    // Pass active rules so the engine can apply progressive difficulty
     const activeRules = (room.activeRules ?? []) as string[];
     const result = calculateRound(
       validGuesses.map(g => ({ playerId: g.playerId, value: g.value })),
       activeRules,
+      activePlayers.length, // needed for Rule 3 two-player gate
     );
 
     await db.update(rounds).set({
@@ -339,21 +339,22 @@ export async function advanceRound(roomId: string) {
 
   // ── Start next round ──────────────────────────────────────────────────────
   const nextRound = room.currentRound + 1;
-  const deadline  = new Date(Date.now() + room.roundDuration * 1000);
 
-  // INSERT the round FIRST — if two clients race, only one succeeds.
-  // The unique constraint on (roomId, roundNumber) prevents duplicates.
-  // onConflictDoNothing returns empty array on conflict (no crash).
+  // New rules just unlocked this advance → give players 5 minutes to read them
+  const oldRuleCount = ((room.activeRules ?? []) as string[]).length;
+  const isRuleIntroRound = newActiveRules.length > oldRuleCount;
+  const durationMs = isRuleIntroRound ? 5 * 60 * 1000 : room.roundDuration * 1000;
+  const deadline = new Date(Date.now() + durationMs);
+
   const inserted = await db.insert(rounds).values({
     roomId, roundNumber: nextRound, status: "submitting", submissionDeadline: deadline,
   }).onConflictDoNothing().returning();
 
-  // If another client already created this round, just sync currentRound and return.
+  // If another client already created this round, just sync state and return.
   if (inserted.length === 0) {
-    // Ensure gameRooms.currentRound is up to date even if we lost the race
     if (room.currentRound < nextRound) {
       await db.update(gameRooms)
-        .set({ currentRound: nextRound, updatedAt: new Date() })
+        .set({ currentRound: nextRound, eliminationCount: totalEliminations, activeRules: newActiveRules, updatedAt: new Date() })
         .where(eq(gameRooms.id, roomId));
     }
     revalidatePath(`/room/${roomId}`);

@@ -17,6 +17,7 @@ import RoundBanner from "@/components/game/RoundBanner";
 import ResultTimer from "@/components/game/ResultTimer";
 import GameOverRedirect from "@/components/game/GameOverRedirect";
 import AddBotsButton from "@/components/game/AddBotsButton";
+import RulesPanel from "@/components/game/RulesPanel";
 
 export default async function RoomPage({ params }: { params: Promise<{ roomId: string }> }) {
   const { roomId } = await params;
@@ -39,6 +40,12 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
   const me = players.find(p => p.userId === session.userId);
   const isHost = room.hostUserId === session.userId;
   const iHaveSubmitted = me ? submittedPlayerIds.includes(me.id) : false;
+  const activeRules = (room.activeRules ?? []) as string[];
+  const eliminationCount = room.eliminationCount ?? 0;
+
+  // Detect rule-intro round: submission window is much longer than normal
+  const isRuleIntroRound = !!currentRound?.submissionDeadline &&
+    (new Date(currentRound.submissionDeadline).getTime() - currentRound.createdAt.getTime()) > 3 * 60 * 1000;
 
   return (
     <main className="relative flex min-h-screen flex-col items-center bg-black text-white overflow-x-hidden">
@@ -116,6 +123,19 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
                 </div>
               </div>
 
+              {/* Triggered rules banner */}
+              {currentResult.triggeredRules.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {currentResult.triggeredRules.map(r => (
+                    <span key={r} className="text-xs px-2 py-1 rounded-full border bg-orange-950/40 border-orange-500/30 text-orange-300 font-semibold">
+                      {r === "duplicate_guard" && "⚠️ Rule 1 Triggered: Duplicates Invalidated"}
+                      {r === "exact_penalty" && "💥 Rule 2 Triggered: Double Penalty"}
+                      {r === "zero_hundred" && "⚔️ Rule 3 Triggered: Zero / Hundred Override"}
+                    </span>
+                  ))}
+                </div>
+              )}
+
               {/* Per-player breakdown */}
               <div className="space-y-1.5">
                 {[...currentResult.breakdown]
@@ -123,11 +143,13 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
                   .map(row => (
                     <div key={row.playerId}
                       className={`flex items-center gap-2 sm:gap-4 rounded-lg px-3 py-2.5 text-sm border
-                        ${row.isWinner ? "bg-yellow-950/40 border-yellow-500/30" : "bg-zinc-950/60 border-white/5"}`}>
+                        ${row.isWinner ? "bg-yellow-950/40 border-yellow-500/30" : "bg-zinc-950/60 border-white/5"}
+                        ${row.isDuplicatePenalty ? "border-orange-500/20 bg-orange-950/20" : ""}`}>
                       <span className={`flex-1 font-semibold truncate ${row.isWinner ? "text-yellow-300" : "text-zinc-300"}`}>
                         {row.username}
                         {row.isExactMatch && <span className="ml-2 text-xs bg-yellow-500 text-black px-1.5 py-0.5 rounded font-bold">EXACT</span>}
-                        {row.isWinner && !row.isExactMatch && <span className="ml-2 text-xs text-emerald-400">👑 Closest</span>}
+                        {row.isDuplicatePenalty && <span className="ml-2 text-xs bg-orange-500/20 text-orange-400 border border-orange-500/30 px-1.5 py-0.5 rounded font-bold">DUPLICATE</span>}
+                        {row.isWinner && !row.isExactMatch && !row.isDuplicatePenalty && <span className="ml-2 text-xs text-emerald-400">👑 Closest</span>}
                       </span>
                       <span className="font-mono text-sm font-bold text-zinc-300 min-w-[2rem] text-center">
                         {row.value < 0 ? <span className="text-zinc-600 text-xs">skipped</span> : row.value}
@@ -135,14 +157,15 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
                       <span className="font-mono text-xs text-zinc-600 hidden sm:block min-w-[4rem] text-right">
                         Δ {row.value >= 0 && row.deviation != null ? row.deviation.toFixed(2) : "—"}
                       </span>
-                      <span className={`font-black font-mono text-base min-w-[3.5rem] text-right ${(row.scoreDelta ?? 0) > 0 ? "text-emerald-400" : "text-red-400"}`}>
-                        {(row.scoreDelta ?? 0) > 0 ? `+${row.scoreDelta}` : row.scoreDelta}
+                      <span className={`font-black font-mono text-base min-w-[3.5rem] text-right
+                        ${(row.scoreDelta ?? 0) > 0 ? "text-emerald-400" : (row.scoreDelta ?? 0) === 0 ? "text-zinc-400" : "text-red-400"}`}>
+                        {(row.scoreDelta ?? 0) > 0 ? `+${row.scoreDelta}` : row.scoreDelta === 0 ? "±0" : row.scoreDelta}
                       </span>
                     </div>
                   ))}
               </div>
 
-              <p className="text-xs text-zinc-700">Exact = ±0 → +2/−2 · Closest = +1/−1 · Tied both win · Skip = −1 · 3 skips in a row = eliminated</p>
+              <p className="text-xs text-zinc-700">Winner ±0 · Loser −1 · Exact match (Rule 2) loser −2 · Duplicate (Rule 1) −1 · Skip −1 · 3 skips = eliminated</p>
 
               {currentResult.resolvedAt && (
                 <ResultTimer resolvedAt={currentResult.resolvedAt.toISOString()} roomId={roomId} resultDisplayMs={20000} />
@@ -252,7 +275,12 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
                 <div className="space-y-6">
                   <div className="flex items-start gap-5 flex-wrap sm:flex-nowrap">
                     {currentRound.submissionDeadline && (
-                      <CountdownTimer deadline={currentRound.submissionDeadline.toISOString()} roomId={roomId} />
+                      <div className="flex flex-col items-center gap-1">
+                        <CountdownTimer deadline={currentRound.submissionDeadline.toISOString()} roomId={roomId} />
+                        {isRuleIntroRound && (
+                          <span className="text-[10px] text-orange-400 font-semibold tracking-wider">5-MIN RULE INTRO</span>
+                        )}
+                      </div>
                     )}
                     <div className="flex-1 min-w-0">
                       {me && !me.isEliminated && !iHaveSubmitted && (
@@ -345,8 +373,8 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
           </Card>
         </div>
 
-        {/* ══ SCOREBOARD ══════════════════════════════════════════════════════ */}
-        <div>
+        {/* ══ RIGHT PANEL ══════════════════════════════════════════════════════ */}
+        <div className="space-y-4">
           <Card className="border border-white/10 bg-zinc-900/60 backdrop-blur-xl sticky top-20">
             <CardHeader className="border-b border-white/5 py-4 px-5">
               <CardTitle className="text-base text-zinc-100 flex items-center justify-between">
@@ -358,7 +386,7 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
               <p className="text-xs text-zinc-700">Elim at ≤ {room.eliminationScore} · 3 consecutive skips = kicked</p>
             </CardHeader>
             <CardContent className="p-0">
-              <ul className="divide-y divide-white/5 max-h-[65vh] overflow-y-auto">
+              <ul className="divide-y divide-white/5 max-h-[40vh] overflow-y-auto">
                 {[...players].sort((a, b) => b.score - a.score).map((p, i) => {
                   const isMe = p.userId === session.userId;
                   const isHostPlayer = p.userId === room.hostUserId;
@@ -381,13 +409,11 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
                           {isHostPlayer && <span className="text-xs text-yellow-500/60">👑</span>}
                           {p.isAi && <span className="text-xs text-zinc-700">🤖</span>}
                         </div>
-                        {/* Show guess after round resolves */}
                         {guessVal !== undefined && (
                           <span className="text-xs font-mono text-zinc-600">
                             {guessVal < 0 ? "skipped" : `→ ${guessVal}`}
                           </span>
                         )}
-                        {/* During active submitting phase */}
                         {!showingResults && room.status === "active" && !p.isEliminated && guessVal === undefined && (
                           <span className={`text-xs ${hasSubmitted ? "text-emerald-700" : "text-zinc-800"}`}>
                             {hasSubmitted ? "✓" : "…"}
@@ -398,7 +424,7 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
                         {p.isWinner && <span className="text-yellow-400">🏆</span>}
                         {p.isEliminated && <span className="text-xs text-red-700 font-bold">OUT</span>}
                         <span className={`text-sm font-bold font-mono min-w-[2.5rem] text-right
-                          ${p.score < 0 ? "text-red-400" : p.score > 0 ? "text-emerald-400" : "text-zinc-400"}`}>
+                          ${p.score < 0 ? "text-red-400" : p.score === 0 ? "text-zinc-400" : "text-emerald-400"}`}>
                           {p.score > 0 ? `+${p.score}` : p.score}
                         </span>
                         {canKick && (
@@ -419,6 +445,9 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
               </ul>
             </CardContent>
           </Card>
+
+          {/* Progressive Rules Panel */}
+          <RulesPanel activeRules={activeRules} eliminationCount={eliminationCount} />
         </div>
 
       </div>
