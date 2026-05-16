@@ -16,11 +16,8 @@ export const metadata: Metadata = {
   title: "King of Diamonds — Beauty Contest",
   description:
     "A real-time multiplayer number-guessing game. Guess closest to 80% of the average to survive.",
-  // Suppresses apple-touch-icon 404s by declaring no icons exist yet.
-  // Swap these out for real PNGs when you have brand assets.
   icons: {
     icon: "/favicon.ico",
-    apple: null,
   },
 };
 
