@@ -17,7 +17,7 @@ import RoundBanner from "@/components/game/RoundBanner";
 import ResultTimer from "@/components/game/ResultTimer";
 import GameOverRedirect from "@/components/game/GameOverRedirect";
 import AddBotsButton from "@/components/game/AddBotsButton";
-import RulesPanel from "@/components/game/RulesPanel";
+import RulesDrawer from "@/components/game/RulesDrawer";
 import BalanceScale from "@/components/game/BalanceScale";
 import GameOverlays from "@/components/game/GameOverlays";
 
@@ -114,11 +114,14 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
           <ChevronRight className="w-4 h-4 text-zinc-600" />
           <span className="text-red-400 font-mono tracking-widest">{room.roomCode}</span>
         </div>
-        <div className="flex items-center gap-3 text-sm">
-          <span className="text-zinc-500 hidden sm:block">Playing as</span>
-          <span className="text-white font-bold">{session.username}</span>
-          {isHost && <Badge variant="outline" className="border-yellow-500/40 bg-yellow-950/30 text-yellow-400 text-xs">HOST</Badge>}
-          {me?.isEliminated && <Badge variant="outline" className="border-red-500/40 bg-red-950/30 text-red-400 text-xs">OUT</Badge>}
+        <div className="flex items-center gap-4 text-sm">
+          <div className="flex items-center gap-3 hidden sm:flex">
+            <span className="text-zinc-500">Playing as</span>
+            <span className="text-white font-bold">{session.username}</span>
+            {isHost && <Badge variant="outline" className="border-yellow-500/40 bg-yellow-950/30 text-yellow-400 text-xs">HOST</Badge>}
+            {me?.isEliminated && <Badge variant="outline" className="border-red-500/40 bg-red-950/30 text-red-400 text-xs">OUT</Badge>}
+          </div>
+          <RulesDrawer activeRules={activeRules} eliminationCount={eliminationCount} />
         </div>
       </nav>
 
@@ -220,7 +223,8 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
           )}
 
           {/* ══ MAIN CARD ════════════════════════════════════════════════════ */}
-          <Card className="border border-white/10 bg-zinc-900/60 shadow-2xl backdrop-blur-xl">
+          {!(room.status === "active" && showingResults) && (
+            <Card className="border border-white/10 bg-zinc-900/60 shadow-2xl backdrop-blur-xl">
             <CardHeader className="border-b border-white/5 pb-5">
               <CardTitle className="text-xl text-white">
                 {room.status === "waiting"   && "⏳ Waiting for players…"}
@@ -408,6 +412,7 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
 
             </CardContent>
           </Card>
+          )}
         </div>
 
         {/* ══ RIGHT PANEL ══════════════════════════════════════════════════════ */}
@@ -482,9 +487,6 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
               </ul>
             </CardContent>
           </Card>
-
-          {/* Progressive Rules Panel */}
-          <RulesPanel activeRules={activeRules} eliminationCount={eliminationCount} />
         </div>
 
       </div>
