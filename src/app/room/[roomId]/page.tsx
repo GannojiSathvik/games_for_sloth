@@ -160,12 +160,23 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
               <div className="flex items-center justify-between flex-wrap gap-4">
                 <div>
                   <p className="text-base font-bold text-white">♦ Round {currentResult.roundNumber} Results</p>
-                  <div className="flex gap-4 text-xs mt-1">
-                    <span className="text-zinc-500">Average: <strong className="text-white">{currentResult.averageGuess?.toFixed(2) ?? "—"}</strong></span>
-                    <span className="text-zinc-500">Target (×0.8): <strong className="text-red-400">{currentResult.targetNumber?.toFixed(2) ?? "—"}</strong></span>
-                  </div>
                 </div>
                 <BalanceScale winnerSide={scaleSide as "left" | "right" | null} />
+              </div>
+
+              {/* Massive Math Breakdown */}
+              <div className="bg-black/40 border border-white/5 rounded-xl p-6 flex flex-col items-center justify-center text-center space-y-3 shadow-inner">
+                <div className="flex items-center gap-3 text-xl sm:text-2xl font-mono font-bold text-zinc-400">
+                  <span className="text-zinc-500 text-sm tracking-widest uppercase mr-2">Average:</span>
+                  <span className="text-white">{currentResult.averageGuess?.toFixed(2) ?? "—"}</span>
+                  <span className="text-zinc-600 px-2">×</span>
+                  <span className="text-white">0.8</span>
+                  <span className="text-zinc-600 px-2">=</span>
+                </div>
+                <div className="text-sm text-red-500/80 uppercase tracking-widest font-black mt-2">Target Number</div>
+                <div className="text-6xl sm:text-7xl font-black font-mono text-red-500 drop-shadow-[0_0_25px_rgba(239,68,68,0.5)]">
+                  {currentResult.targetNumber?.toFixed(2) ?? "—"}
+                </div>
               </div>
 
               {/* Triggered rules banner */}
@@ -208,7 +219,7 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
                     </span>
                     <span className={`font-black font-mono text-base min-w-[3.5rem] text-right
                       ${(row.scoreDelta ?? 0) > 0 ? "text-emerald-400" : (row.scoreDelta ?? 0) === 0 ? "text-zinc-400" : "text-red-400"}`}>
-                      {(row.scoreDelta ?? 0) > 0 ? `+${row.scoreDelta}` : row.scoreDelta === 0 ? "±0" : row.scoreDelta}
+                      {(row.scoreDelta ?? 0) > 0 ? `+${row.scoreDelta}` : row.scoreDelta === 0 ? "-0" : row.scoreDelta}
                     </span>
                   </div>
                 ))}
