@@ -36,8 +36,8 @@ export default memo(function GameOverlays({
 }: Props) {
   const [showElim,  setShowElim]  = useState(false);
   const [showRule,  setShowRule]  = useState(false);
-  const prevElimRef  = useRef(0);
-  const prevRuleRef  = useRef<string | null>(null);
+  const prevElimRef  = useRef(newlyEliminated.length);
+  const prevRuleRef  = useRef<string | null>(newRuleId);
 
   // Trigger elimination overlay when new players are eliminated
   useEffect(() => {

@@ -32,7 +32,10 @@ export default function ResultTimer({ resolvedAt, roomId, resultDisplayMs = 2000
     advancedRef.current = true;
     advanceRound(roomId)
       .then(() => router.refresh())   // immediately sync this client
-      .catch(console.error);
+      .catch((err) => {
+        console.error(err);
+        advancedRef.current = false;
+      });
   }
 
   // ── Countdown ────────────────────────────────────────────────────────────

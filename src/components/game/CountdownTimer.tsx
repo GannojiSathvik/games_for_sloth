@@ -29,7 +29,10 @@ export default function CountdownTimer({ deadline, roomId }: Props) {
       setSecondsLeft(left);
       if (left === 0 && !resolvedRef.current) {
         resolvedRef.current = true;
-        resolveCurrentRound(roomId).catch(console.error);
+        resolveCurrentRound(roomId).catch((err) => {
+          console.error(err);
+          resolvedRef.current = false;
+        });
       }
     }
 

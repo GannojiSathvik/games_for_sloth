@@ -276,9 +276,14 @@ export async function advanceRound(roomId: string) {
   if (!currentRound || currentRound.status !== "completed") return;
 
   // Guard: if the next round already exists, don't double-advance
+  const nextRoundNumber = room.currentRound + 1;
   const [nextExists] = await db.select({ id: rounds.id }).from(rounds)
-    .where(and(eq(rounds.roomId, roomId), eq(rounds.roundNumber, room.currentRound + 1))).limit(1);
-  if (nextExists) return;
+    .where(and(eq(rounds.roomId, roomId), eq(rounds.roundNumber, nextRoundNumber))).limit(1);
+  if (nextExists) {
+    await db.update(gameRooms).set({ currentRound: nextRoundNumber, updatedAt: new Date() }).where(eq(gameRooms.id, roomId));
+    revalidatePath(`/room/${roomId}`);
+    return;
+  }
 
   const allPlayers = await db.select().from(players)
     .where(and(eq(players.roomId, roomId), eq(players.isEliminated, false)));
