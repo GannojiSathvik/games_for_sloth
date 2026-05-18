@@ -9,9 +9,8 @@ interface Props { deadline: string; roomId: string; }
 
 export default function CountdownTimer({ deadline, roomId }: Props) {
   const deadlineMs   = new Date(deadline).getTime();
-  const [secondsLeft, setSecondsLeft] = useState(() =>
-    Math.max(0, Math.ceil((deadlineMs - Date.now()) / 1000))
-  );
+  const [secondsLeft, setSecondsLeft] = useState(0);
+  const [mounted, setMounted] = useState(false);
   const resolvedRef  = useRef(false);
   const prevDeadline = useRef(deadline);
 
@@ -22,6 +21,7 @@ export default function CountdownTimer({ deadline, roomId }: Props) {
   }
 
   useEffect(() => {
+    setMounted(true);
     resolvedRef.current = false;
 
     function tick() {
@@ -41,6 +41,18 @@ export default function CountdownTimer({ deadline, roomId }: Props) {
     return () => clearInterval(id);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deadline, roomId]);
+
+  if (!mounted) {
+    return (
+      <div className="flex flex-col items-center gap-1 flex-shrink-0">
+        <div className="relative w-24 h-24">
+          <svg className="w-24 h-24 -rotate-90" viewBox="0 0 96 96">
+            <circle cx="48" cy="48" r="36" fill="none" strokeWidth="6" className="stroke-zinc-800" />
+          </svg>
+        </div>
+      </div>
+    );
+  }
 
   const totalSecs = Math.max(1, Math.ceil((deadlineMs - Date.now()) / 1000));
   const pct       = (secondsLeft / totalSecs) * 100;

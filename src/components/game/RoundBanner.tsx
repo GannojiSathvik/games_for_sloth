@@ -21,8 +21,7 @@ function getBannerEndsAt(deadlineIso: string, roundDurationSecs: number): number
 }
 
 export default function RoundBanner({ roundNumber, submissionDeadline, roundDurationSecs }: Props) {
-  // Initialise from timestamp — works even on first mount after a refresh
-  const [visible, setVisible] = useState(() => Date.now() < getBannerEndsAt(submissionDeadline, roundDurationSecs));
+  const [visible, setVisible] = useState(false);
 
   useEffect(() => {
     const bannerEndsAt = getBannerEndsAt(submissionDeadline, roundDurationSecs);

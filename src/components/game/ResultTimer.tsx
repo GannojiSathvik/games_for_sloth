@@ -17,6 +17,7 @@ interface Props {
 export default function ResultTimer({ resolvedAt, roomId, resultDisplayMs = 20000 }: Props) {
   const router        = useRouter();
   const [msLeft, setMsLeft] = useState<number>(resultDisplayMs);
+  const [mounted, setMounted] = useState(false);
   const advancedRef   = useRef(false);
   const resolvedRef   = useRef(resolvedAt);
 
@@ -40,6 +41,7 @@ export default function ResultTimer({ resolvedAt, roomId, resultDisplayMs = 2000
 
   // ── Countdown ────────────────────────────────────────────────────────────
   useEffect(() => {
+    setMounted(true);
     advancedRef.current = false;
     const resolvedTime = new Date(resolvedAt).getTime();
 
@@ -55,6 +57,10 @@ export default function ResultTimer({ resolvedAt, roomId, resultDisplayMs = 2000
     return () => clearInterval(id);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resolvedAt, roomId, resultDisplayMs]);
+
+  if (!mounted) {
+    return <div className="flex items-center gap-3 h-8"></div>;
+  }
 
   const seconds = Math.ceil(msLeft / 1000);
   const pct     = (msLeft / resultDisplayMs) * 100;
