@@ -68,7 +68,22 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
   const scaleSide = winnerIdx === -1 ? null : winnerIdx < sortedBreakdown.length / 2 ? "left" : "right";
 
   return (
-    <div className="w-full flex flex-col items-center">
+    <main className="relative flex min-h-screen flex-col items-center text-white overflow-x-hidden">
+      {/* ── Full-page video background ──────────────────────────────────────── */}
+      {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+      <video
+        autoPlay
+        loop
+        muted
+        playsInline
+        preload="auto"
+        className="fixed inset-0 w-full h-full object-cover z-0 pointer-events-none"
+        style={{ filter: 'brightness(0.35)', willChange: 'transform' }}
+      >
+        <source src="/bg-video.mp4" type="video/mp4" />
+      </video>
+      {/* Dark overlay on top of video for legibility */}
+      <div className="fixed inset-0 z-[1] bg-black/50 pointer-events-none" />
       <RoomPoller />
 
       {/* ── Client-side overlays (elimination, rule announcement, game clear) ── */}
@@ -83,10 +98,11 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
         winnerScore={winner?.score ?? null}
         isWinnerMe={winner?.userId === session.userId}
       />
-      {room.status === "active" && currentRound?.createdAt && (
+      {room.status === "active" && currentRound?.submissionDeadline && (
         <RoundBanner
           roundNumber={room.currentRound}
-          createdAtIso={currentRound.createdAt.toISOString()}
+          submissionDeadline={currentRound.submissionDeadline.toISOString()}
+          roundDurationSecs={room.roundDuration}
         />
       )}
 
@@ -161,7 +177,7 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
                 </Badge>
               )}
               {room.status === "waiting" && <Badge variant="outline" className="border-white/20 text-zinc-400">Lobby</Badge>}
-              {room.status === "finished"  && <Badge variant="outline" className="border-yellow-500/40 text-yellow-400">Finished</Badge>}
+              {room.status === "finished" && <Badge variant="outline" className="border-yellow-500/40 text-yellow-400">Finished</Badge>}
             </div>
           </div>
 
@@ -197,8 +213,8 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
                   {currentResult.triggeredRules.map(r => (
                     <span key={r} className="text-xs px-2 py-1 rounded-full border bg-orange-950/40 border-orange-500/30 text-orange-300 font-semibold">
                       {r === "duplicate_guard" && "⚠️ Rule 1 Triggered: Duplicates Invalidated"}
-                      {r === "exact_penalty"   && "💥 Rule 2 Triggered: Double Penalty"}
-                      {r === "zero_hundred"    && "⚔️ Rule 3 Triggered: Zero / Hundred Override"}
+                      {r === "exact_penalty" && "💥 Rule 2 Triggered: Double Penalty"}
+                      {r === "zero_hundred" && "⚔️ Rule 3 Triggered: Zero / Hundred Override"}
                     </span>
                   ))}
                 </div>
@@ -219,7 +235,7 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
                     </div>
                     <span className={`flex-1 font-semibold truncate ${row.isWinner ? "text-yellow-300" : "text-zinc-300"}`}>
                       {row.username}
-                      {row.isExactMatch    && <span className="ml-2 text-xs bg-yellow-500 text-black px-1.5 py-0.5 rounded font-bold">EXACT</span>}
+                      {row.isExactMatch && <span className="ml-2 text-xs bg-yellow-500 text-black px-1.5 py-0.5 rounded font-bold">EXACT</span>}
                       {row.isDuplicatePenalty && <span className="ml-2 text-xs bg-orange-500/20 text-orange-400 border border-orange-500/30 px-1.5 py-0.5 rounded font-bold">DUPLICATE</span>}
                       {row.isWinner && !row.isExactMatch && !row.isDuplicatePenalty && <span className="ml-2 text-xs text-emerald-400">👑 Closest</span>}
                     </span>
@@ -248,193 +264,193 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
           {/* ══ MAIN CARD ════════════════════════════════════════════════════ */}
           {!(room.status === "active" && showingResults) && (
             <Card className="border border-white/10 bg-zinc-900/95 shadow-2xl">
-            <CardHeader className="border-b border-white/5 pb-5">
-              <CardTitle className="text-xl text-white">
-                {room.status === "waiting"   && "⏳ Waiting for players…"}
-                {room.status === "active" && showingResults && <>📊 Round {room.currentRound} complete</>}
-                {room.status === "active" && !showingResults && <><span className="text-red-500 mr-1">♦</span>Round {room.currentRound} — Submit your guess</>}
-                {room.status === "finished"  && "🏆 Game Over"}
-              </CardTitle>
-              <CardDescription className="text-zinc-400">
-                {room.status === "waiting"   && "Share the invite link. Host sets game rules."}
-                {room.status === "active" && showingResults && "Results shown above — next round starts soon."}
-                {room.status === "active" && !showingResults && `Guess 0–100. Target = 80% of avg. Elimination ≤ ${room.eliminationScore}. 3 skips = kicked.`}
-                {room.status === "finished"  && "The last player standing wins!"}
-              </CardDescription>
-            </CardHeader>
+              <CardHeader className="border-b border-white/5 pb-5">
+                <CardTitle className="text-xl text-white">
+                  {room.status === "waiting" && "⏳ Waiting for players…"}
+                  {room.status === "active" && showingResults && <>📊 Round {room.currentRound} complete</>}
+                  {room.status === "active" && !showingResults && <><span className="text-red-500 mr-1">♦</span>Round {room.currentRound} — Submit your guess</>}
+                  {room.status === "finished" && "🏆 Game Over"}
+                </CardTitle>
+                <CardDescription className="text-zinc-400">
+                  {room.status === "waiting" && "Share the invite link. Host sets game rules."}
+                  {room.status === "active" && showingResults && "Results shown above — next round starts soon."}
+                  {room.status === "active" && !showingResults && `Guess 0–100. Target = 80% of avg. Elimination ≤ ${room.eliminationScore}. 3 skips = kicked.`}
+                  {room.status === "finished" && "The last player standing wins!"}
+                </CardDescription>
+              </CardHeader>
 
-            <CardContent className="p-6 space-y-6">
+              <CardContent className="p-6 space-y-6">
 
-              {/* ════ LOBBY ════════════════════════════════════════════════════ */}
-              {room.status === "waiting" && (
-                <>
-                  <div className="rounded-xl bg-zinc-950/60 border border-white/5 p-5 space-y-3">
-                    <p className="text-xs text-zinc-500 uppercase tracking-widest font-semibold">Invite Code</p>
-                    <div className="flex items-center gap-4 flex-wrap">
-                      <span className="text-4xl font-mono tracking-[0.25em] text-white font-black">{room.roomCode}</span>
-                      <CopyRoomLink roomCode={room.roomCode} roomId={roomId} />
+                {/* ════ LOBBY ════════════════════════════════════════════════════ */}
+                {room.status === "waiting" && (
+                  <>
+                    <div className="rounded-xl bg-zinc-950/60 border border-white/5 p-5 space-y-3">
+                      <p className="text-xs text-zinc-500 uppercase tracking-widest font-semibold">Invite Code</p>
+                      <div className="flex items-center gap-4 flex-wrap">
+                        <span className="text-4xl font-mono tracking-[0.25em] text-white font-black">{room.roomCode}</span>
+                        <CopyRoomLink roomCode={room.roomCode} roomId={roomId} />
+                      </div>
                     </div>
-                  </div>
 
-                  {isHost ? (
-                    <div className="space-y-4">
-                      <p className="text-sm text-zinc-400">
-                        You are the <span className="text-yellow-400 font-semibold">host</span>.
-                        Needs ≥ 3 players — bots auto-fill if short.
-                      </p>
+                    {isHost ? (
+                      <div className="space-y-4">
+                        <p className="text-sm text-zinc-400">
+                          You are the <span className="text-yellow-400 font-semibold">host</span>.
+                          Needs ≥ 3 players — bots auto-fill if short.
+                        </p>
 
-                      <div className="rounded-xl bg-zinc-950/50 border border-white/5 p-4 space-y-3">
-                        <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Game Settings</p>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-1">
-                            <Label htmlFor="elimScore" className="text-xs text-zinc-400">Elimination Score</Label>
-                            <select id="elimScore" name="elimScore" form="start-form"
-                              className="w-full bg-zinc-900 border border-white/10 text-white rounded-md px-3 py-2 text-sm" defaultValue="-10">
-                              <option value="-3">−3 (Fast)</option>
-                              <option value="-5">−5 (Normal)</option>
-                              <option value="-10">−10 (Standard)</option>
-                              <option value="-15">−15 (Long)</option>
-                              <option value="-20">−20 (Marathon)</option>
-                            </select>
-                          </div>
-                          <div className="space-y-1">
-                            <Label htmlFor="roundDur" className="text-xs text-zinc-400">Round Timer</Label>
-                            <select id="roundDur" name="roundDuration" form="start-form"
-                              className="w-full bg-zinc-900 border border-white/10 text-white rounded-md px-3 py-2 text-sm" defaultValue="30">
-                              <option value="15">15s</option>
-                              <option value="30">30s (Default)</option>
-                              <option value="45">45s</option>
-                              <option value="60">60s</option>
-                            </select>
+                        <div className="rounded-xl bg-zinc-950/50 border border-white/5 p-4 space-y-3">
+                          <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Game Settings</p>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                              <Label htmlFor="elimScore" className="text-xs text-zinc-400">Elimination Score</Label>
+                              <select id="elimScore" name="elimScore" form="start-form"
+                                className="w-full bg-zinc-900 border border-white/10 text-white rounded-md px-3 py-2 text-sm" defaultValue="-10">
+                                <option value="-3">−3 (Fast)</option>
+                                <option value="-5">−5 (Normal)</option>
+                                <option value="-10">−10 (Standard)</option>
+                                <option value="-15">−15 (Long)</option>
+                                <option value="-20">−20 (Marathon)</option>
+                              </select>
+                            </div>
+                            <div className="space-y-1">
+                              <Label htmlFor="roundDur" className="text-xs text-zinc-400">Round Timer</Label>
+                              <select id="roundDur" name="roundDuration" form="start-form"
+                                className="w-full bg-zinc-900 border border-white/10 text-white rounded-md px-3 py-2 text-sm" defaultValue="30">
+                                <option value="15">15s</option>
+                                <option value="30">30s (Default)</option>
+                                <option value="45">45s</option>
+                                <option value="60">60s</option>
+                              </select>
+                            </div>
                           </div>
                         </div>
+
+                        <form id="start-form" action={async (fd: FormData) => {
+                          "use server";
+                          const elimScore = parseInt(fd.get("elimScore") as string) || -10;
+                          const roundDur = parseInt(fd.get("roundDuration") as string) || 30;
+                          const { db: dbClient } = await import("@/db");
+                          const { gameRooms: gr } = await import("@/db/schema");
+                          const { eq: eqFn } = await import("drizzle-orm");
+                          await dbClient.update(gr).set({ eliminationScore: elimScore, roundDuration: roundDur }).where(eqFn(gr.id, roomId));
+                          await startGame(roomId, room.hostUserId);
+                        }}>
+                          <Button type="submit" size="lg" className="w-full bg-red-600 hover:bg-red-500 text-white font-bold text-base h-12 shadow-[0_0_20px_rgba(220,38,38,0.25)]">
+                            ▶ Start Game
+                          </Button>
+                        </form>
+
+                        <AddBotsButton roomId={roomId} />
+                        <p className="text-xs text-zinc-700">AI bots pick random 0–100 (different each round)</p>
                       </div>
-
-                      <form id="start-form" action={async (fd: FormData) => {
-                        "use server";
-                        const elimScore = parseInt(fd.get("elimScore") as string) || -10;
-                        const roundDur  = parseInt(fd.get("roundDuration") as string) || 30;
-                        const { db: dbClient } = await import("@/db");
-                        const { gameRooms: gr }  = await import("@/db/schema");
-                        const { eq: eqFn }       = await import("drizzle-orm");
-                        await dbClient.update(gr).set({ eliminationScore: elimScore, roundDuration: roundDur }).where(eqFn(gr.id, roomId));
-                        await startGame(roomId, room.hostUserId);
-                      }}>
-                        <Button type="submit" size="lg" className="w-full bg-red-600 hover:bg-red-500 text-white font-bold text-base h-12 shadow-[0_0_20px_rgba(220,38,38,0.25)]">
-                          ▶ Start Game
-                        </Button>
-                      </form>
-
-                      <AddBotsButton roomId={roomId} />
-                      <p className="text-xs text-zinc-700">AI bots pick random 0–100 (different each round)</p>
-                    </div>
-                  ) : (
-                    <div className="rounded-xl border border-blue-500/20 bg-blue-950/20 p-4 text-sm text-blue-300">
-                      Waiting for <strong>{players.find(p => p.userId === room.hostUserId)?.username ?? "host"}</strong> to start…
-                    </div>
-                  )}
-                </>
-              )}
-
-              {/* ════ ACTIVE — SHOWING RESULTS ═════════════════════════════════ */}
-              {room.status === "active" && showingResults && (
-                <div className="text-center py-3">
-                  <p className="text-zinc-600 text-xs">Results are shown above. Next round starts automatically.</p>
-                </div>
-              )}
-
-              {/* ════ ACTIVE — SUBMITTING ══════════════════════════════════════ */}
-              {room.status === "active" && !showingResults && currentRound && (
-                <div className="space-y-6">
-                  <div className="flex items-start gap-5 flex-wrap sm:flex-nowrap">
-                    {currentRound.submissionDeadline && (
-                      <div className="flex flex-col items-center gap-1">
-                        <CountdownTimer deadline={currentRound.submissionDeadline.toISOString()} roomId={roomId} />
-                        {isRuleIntroRound && (
-                          <span className="text-[10px] text-orange-400 font-semibold tracking-wider">5-MIN RULE INTRO</span>
-                        )}
+                    ) : (
+                      <div className="rounded-xl border border-blue-500/20 bg-blue-950/20 p-4 text-sm text-blue-300">
+                        Waiting for <strong>{players.find(p => p.userId === room.hostUserId)?.username ?? "host"}</strong> to start…
                       </div>
                     )}
-                    <div className="flex-1 min-w-0">
-                      {me && !me.isEliminated && !iHaveSubmitted && (
-                        <GuessForm playerId={me.id} roundId={currentRound.id} roomId={roomId} />
-                      )}
-                      {iHaveSubmitted && !me?.isEliminated && (
-                        <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-5 flex items-center gap-4">
-                          <span className="text-4xl">✅</span>
-                          <div>
-                            <p className="text-emerald-400 font-bold text-lg">Guess submitted!</p>
-                            <p className="text-zinc-500 text-sm">Waiting for others… Resolves when everyone submits.</p>
-                          </div>
-                        </div>
-                      )}
-                      {me?.isEliminated && (
-                        <div className="rounded-xl border border-red-500/30 bg-red-950/20 p-5 flex items-center gap-4">
-                          <span className="text-4xl">💀</span>
-                          <div>
-                            <p className="text-red-400 font-bold text-lg">You&apos;ve been eliminated</p>
-                            <p className="text-zinc-500 text-sm">Spectate the remaining players.</p>
-                          </div>
-                        </div>
-                      )}
-                      {!me && (
-                        <div className="rounded-xl border border-zinc-700/30 bg-zinc-900/20 p-5 text-sm text-zinc-500">
-                          You are spectating.
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                  </>
+                )}
 
-                  {/* Submission status chips */}
-                  <div className="space-y-2">
-                    <p className="text-xs text-zinc-600 uppercase tracking-wider font-semibold">This round</p>
-                    <div className="flex flex-wrap gap-2">
-                      {players.filter(p => !p.isEliminated).map(p => {
-                        const submitted = submittedPlayerIds.includes(p.id);
-                        return (
-                          <span key={p.id}
-                            className={`text-xs px-3 py-1.5 rounded-full font-medium border transition-all
+                {/* ════ ACTIVE — SHOWING RESULTS ═════════════════════════════════ */}
+                {room.status === "active" && showingResults && (
+                  <div className="text-center py-3">
+                    <p className="text-zinc-600 text-xs">Results are shown above. Next round starts automatically.</p>
+                  </div>
+                )}
+
+                {/* ════ ACTIVE — SUBMITTING ══════════════════════════════════════ */}
+                {room.status === "active" && !showingResults && currentRound && (
+                  <div className="space-y-6">
+                    <div className="flex items-start gap-5 flex-wrap sm:flex-nowrap">
+                      {currentRound.submissionDeadline && (
+                        <div className="flex flex-col items-center gap-1">
+                          <CountdownTimer deadline={currentRound.submissionDeadline.toISOString()} roomId={roomId} />
+                          {isRuleIntroRound && (
+                            <span className="text-[10px] text-orange-400 font-semibold tracking-wider">5-MIN RULE INTRO</span>
+                          )}
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        {me && !me.isEliminated && !iHaveSubmitted && (
+                          <GuessForm playerId={me.id} roundId={currentRound.id} roomId={roomId} />
+                        )}
+                        {iHaveSubmitted && !me?.isEliminated && (
+                          <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-5 flex items-center gap-4">
+                            <span className="text-4xl">✅</span>
+                            <div>
+                              <p className="text-emerald-400 font-bold text-lg">Guess submitted!</p>
+                              <p className="text-zinc-500 text-sm">Waiting for others… Resolves when everyone submits.</p>
+                            </div>
+                          </div>
+                        )}
+                        {me?.isEliminated && (
+                          <div className="rounded-xl border border-red-500/30 bg-red-950/20 p-5 flex items-center gap-4">
+                            <span className="text-4xl">💀</span>
+                            <div>
+                              <p className="text-red-400 font-bold text-lg">You&apos;ve been eliminated</p>
+                              <p className="text-zinc-500 text-sm">Spectate the remaining players.</p>
+                            </div>
+                          </div>
+                        )}
+                        {!me && (
+                          <div className="rounded-xl border border-zinc-700/30 bg-zinc-900/20 p-5 text-sm text-zinc-500">
+                            You are spectating.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Submission status chips */}
+                    <div className="space-y-2">
+                      <p className="text-xs text-zinc-600 uppercase tracking-wider font-semibold">This round</p>
+                      <div className="flex flex-wrap gap-2">
+                        {players.filter(p => !p.isEliminated).map(p => {
+                          const submitted = submittedPlayerIds.includes(p.id);
+                          return (
+                            <span key={p.id}
+                              className={`text-xs px-3 py-1.5 rounded-full font-medium border transition-all
                               ${submitted ? "bg-emerald-950/40 border-emerald-600/30 text-emerald-400" : "bg-zinc-900 border-white/10 text-zinc-500"}`}>
-                            {submitted ? "✓" : "…"} {p.username}{p.isAi ? " 🤖" : ""}
-                          </span>
-                        );
-                      })}
+                              {submitted ? "✓" : "…"} {p.username}{p.isAi ? " 🤖" : ""}
+                            </span>
+                          );
+                        })}
+                      </div>
                     </div>
+
+                    {isHost && (
+                      <>
+                        <Separator className="bg-white/5" />
+                        <form action={async () => { "use server"; await resolveCurrentRound(roomId); }}>
+                          <Button type="submit" variant="ghost" className="w-full text-zinc-600 hover:text-white hover:bg-white/5 text-xs">
+                            ⏭ Force Resolve (Host)
+                          </Button>
+                        </form>
+                      </>
+                    )}
                   </div>
+                )}
 
-                  {isHost && (
-                    <>
-                      <Separator className="bg-white/5" />
-                      <form action={async () => { "use server"; await resolveCurrentRound(roomId); }}>
-                        <Button type="submit" variant="ghost" className="w-full text-zinc-600 hover:text-white hover:bg-white/5 text-xs">
-                          ⏭ Force Resolve (Host)
-                        </Button>
-                      </form>
-                    </>
-                  )}
-                </div>
-              )}
-
-              {/* ════ FINISHED — now handled by GameClearScreen overlay ═══ */}
-              {room.status === "finished" && !winner && (
-                <div className="flex flex-col items-center py-10 text-center text-zinc-500">
-                  <GameOverRedirect delayMs={8000} />
-                  <p className="text-2xl">🤝 Everyone eliminated — draw!</p>
-                  <Link href="/" className="mt-6">
-                    <Button variant="outline" className="border-white/20 text-white hover:bg-white hover:text-black">Go Home Now</Button>
-                  </Link>
-                </div>
-              )}
-              {room.status === "finished" && winner && (
-                <div className="flex flex-col items-center py-6 text-center">
-                  <GameOverRedirect delayMs={12000} />
-                  <p className="text-zinc-600 text-sm">Victory screen loading…</p>
-                </div>
-              )}
+                {/* ════ FINISHED — now handled by GameClearScreen overlay ═══ */}
+                {room.status === "finished" && !winner && (
+                  <div className="flex flex-col items-center py-10 text-center text-zinc-500">
+                    <GameOverRedirect delayMs={8000} />
+                    <p className="text-2xl">🤝 Everyone eliminated — draw!</p>
+                    <Link href="/" className="mt-6">
+                      <Button variant="outline" className="border-white/20 text-white hover:bg-white hover:text-black">Go Home Now</Button>
+                    </Link>
+                  </div>
+                )}
+                {room.status === "finished" && winner && (
+                  <div className="flex flex-col items-center py-6 text-center">
+                    <GameOverRedirect delayMs={12000} />
+                    <p className="text-zinc-600 text-sm">Victory screen loading…</p>
+                  </div>
+                )}
 
 
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
           )}
         </div>
 
@@ -513,6 +529,6 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
         </div>
 
       </div>
-    </div>
+    </main>
   );
 }
