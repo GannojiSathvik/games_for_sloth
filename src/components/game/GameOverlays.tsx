@@ -5,7 +5,7 @@
 
 import { useState, useEffect, useRef, memo, useCallback } from "react";
 import EliminationOverlay from "./EliminationOverlay";
-import RuleAnnouncement   from "./RuleAnnouncement";
+import RuleUnlockedScreen from "./RuleUnlockedScreen";
 import GameClearScreen    from "./GameClearScreen";
 
 interface EliminatedPlayer { username: string; score: number; }
@@ -58,6 +58,7 @@ export default memo(function GameOverlays({
   }, [isRuleIntroRound, newRuleId]);
 
   const handleElimDismiss = useCallback(() => setShowElim(false), []);
+  const handleRuleDismiss = useCallback(() => setShowRule(false), []);
 
   return (
     <>
@@ -68,10 +69,10 @@ export default memo(function GameOverlays({
         />
       )}
 
-      {showRule && newRuleId && deadlineIso && !showElim && (
-        <RuleAnnouncement
-          newRuleId={newRuleId}
-          deadlineIso={deadlineIso}
+      {showRule && newRuleId && !showElim && (
+        <RuleUnlockedScreen
+          ruleId={newRuleId}
+          onDismiss={handleRuleDismiss}
         />
       )}
 

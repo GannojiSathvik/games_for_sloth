@@ -20,6 +20,8 @@ import AddBotsButton from "@/components/game/AddBotsButton";
 import RulesDrawer from "@/components/game/RulesDrawer";
 import BalanceScale from "@/components/game/BalanceScale";
 import GameOverlays from "@/components/game/GameOverlays";
+import AnimatedBackground from "@/components/game/AnimatedBackground";
+import RulesOverview from "@/components/game/RulesOverview";
 
 export default async function RoomPage({ params }: { params: Promise<{ roomId: string }> }) {
   const { roomId } = await params;
@@ -69,21 +71,8 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
 
   return (
     <main className="relative flex min-h-screen flex-col items-center text-white overflow-x-hidden">
-      {/* ── Full-page video background ──────────────────────────────────────── */}
-      {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-      <video
-        autoPlay
-        loop
-        muted
-        playsInline
-        preload="auto"
-        className="fixed inset-0 w-full h-full object-cover z-0 pointer-events-none"
-        style={{ filter: 'brightness(0.35)', willChange: 'transform' }}
-      >
-        <source src="/bg-video.mp4" type="video/mp4" />
-      </video>
-      {/* Dark overlay on top of video for legibility */}
-      <div className="fixed inset-0 z-[1] bg-black/50 pointer-events-none" />
+      {/* ── Animated CSS background (replaces heavy video) ──────────────────── */}
+      <AnimatedBackground />
       <RoomPoller />
 
       {/* ── Client-side overlays (elimination, rule announcement, game clear) ── */}
@@ -291,6 +280,9 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
                         <CopyRoomLink roomCode={room.roomCode} roomId={roomId} />
                       </div>
                     </div>
+
+                    {/* ── Full Rules Overview ── */}
+                    <RulesOverview />
 
                     {isHost ? (
                       <div className="space-y-4">
