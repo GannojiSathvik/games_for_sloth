@@ -68,22 +68,7 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
   const scaleSide = winnerIdx === -1 ? null : winnerIdx < sortedBreakdown.length / 2 ? "left" : "right";
 
   return (
-    <main className="relative flex min-h-screen flex-col items-center text-white overflow-x-hidden">
-      {/* ── Full-page video background ──────────────────────────────────────── */}
-      {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-      <video
-        autoPlay
-        loop
-        muted
-        playsInline
-        preload="auto"
-        className="fixed inset-0 w-full h-full object-cover z-0 pointer-events-none"
-        style={{ filter: 'brightness(0.35)', willChange: 'transform' }}
-      >
-        <source src="/bg-video.mp4" type="video/mp4" />
-      </video>
-      {/* Dark overlay on top of video for legibility */}
-      <div className="fixed inset-0 z-[1] bg-black/50 pointer-events-none" />
+    <div className="w-full flex flex-col items-center">
       <RoomPoller />
 
       {/* ── Client-side overlays (elimination, rule announcement, game clear) ── */}
@@ -98,11 +83,10 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
         winnerScore={winner?.score ?? null}
         isWinnerMe={winner?.userId === session.userId}
       />
-      {room.status === "active" && currentRound?.submissionDeadline && (
+      {room.status === "active" && currentRound?.createdAt && (
         <RoundBanner
           roundNumber={room.currentRound}
-          submissionDeadline={currentRound.submissionDeadline.toISOString()}
-          roundDurationSecs={room.roundDuration}
+          createdAtIso={currentRound.createdAt.toISOString()}
         />
       )}
 
@@ -529,6 +513,6 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
         </div>
 
       </div>
-    </main>
+    </div>
   );
 }
