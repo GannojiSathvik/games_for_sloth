@@ -3,6 +3,8 @@
 import { db } from "@/db";
 import { gameRooms, players, rounds, guesses, users } from "@/db/schema";
 import { calculateRound, computeActiveRules } from "@/lib/game-engine";
+import { pickBotNames } from "@/lib/bot-names";
+import { getSmartAIGuess } from "@/lib/bot-ai";
 import { eq, and, sql, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { nanoid } from "nanoid";
@@ -71,39 +73,48 @@ export async function kickPlayer(formData: FormData) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// AI — truly random, different spread per bot "personality"
+// AI — smart bots with personalities and curated names
 // ─────────────────────────────────────────────────────────────────────────────
 
-function getInstantAIGuess(): number {
-  // Uniformly random 0-100 to avoid clustering;
-  // each call is independently seeded by Math.random()
-  return Math.floor(Math.random() * 101);
-}
-
 export async function addAIPlayers(roomId: string, count: number) {
-  const labels = ["Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta"];
-  for (let i = 0; i < count; i++) {
-    const label = labels[i % labels.length];
-    const aiName = `Bot_${label}_${nanoid(4)}`;
-    const aiUser = await getOrCreateUser(aiName, true);
+  // Get existing player usernames to avoid duplicates
+  const existingPlayers = await db
+    .select({ username: users.username })
+    .from(players)
+    .innerJoin(users, eq(players.userId, users.id))
+    .where(eq(players.roomId, roomId));
+  const existingNames = existingPlayers.map(p => p.username);
+
+  const botNames = pickBotNames(count, existingNames);
+  for (const name of botNames) {
+    const aiUser = await getOrCreateUser(name, true);
     await db.insert(players).values({ userId: aiUser.id, roomId }).onConflictDoNothing();
   }
   revalidatePath(`/room/${roomId}`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Submit AI guesses instantly at round start
+// Submit AI guesses — smart AI with varied personalities
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function submitAIGuessesForRound(roundId: string, roomId: string) {
+  const [room] = await db.select().from(gameRooms).where(eq(gameRooms.id, roomId)).limit(1);
+  const roundNumber = room?.currentRound ?? 1;
+
   const aiPlayers = await db
     .select({ id: players.id, username: users.username })
     .from(players)
     .innerJoin(users, eq(players.userId, users.id))
     .where(and(eq(players.roomId, roomId), eq(players.isEliminated, false), eq(users.isAi, true)));
 
+  // Count total active players for Rule 3 awareness
+  const [{ total }] = await db
+    .select({ total: sql<number>`count(*)::int` })
+    .from(players)
+    .where(and(eq(players.roomId, roomId), eq(players.isEliminated, false)));
+
   for (const ai of aiPlayers) {
-    const guessValue = getInstantAIGuess();
+    const guessValue = getSmartAIGuess(roundNumber, total);
     await db.insert(guesses).values({ roundId, playerId: ai.id, value: guessValue }).onConflictDoNothing();
   }
 }
