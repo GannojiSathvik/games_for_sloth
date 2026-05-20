@@ -64,7 +64,7 @@ export default function RulesDrawer({ activeRules, eliminationCount }: { activeR
 
       {isOpen && (
         <div
-          className="fixed inset-0 z-[400] bg-black/60 backdrop-blur-sm"
+          className="fixed inset-0 z-[400] bg-black/60"
           onClick={() => setIsOpen(false)}
         />
       )}

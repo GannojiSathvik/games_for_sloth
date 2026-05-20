@@ -76,13 +76,14 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
         loop
         muted
         playsInline
+        preload="auto"
         className="fixed inset-0 w-full h-full object-cover z-0 pointer-events-none"
-        style={{ filter: 'brightness(0.45)' }}
+        style={{ filter: 'brightness(0.35)', willChange: 'transform' }}
       >
         <source src="/bg-video.mp4" type="video/mp4" />
       </video>
       {/* Dark overlay on top of video for legibility */}
-      <div className="fixed inset-0 z-[1] bg-black/40 pointer-events-none" />
+      <div className="fixed inset-0 z-[1] bg-black/50 pointer-events-none" />
       <RoomPoller />
 
       {/* ── Client-side overlays (elimination, rule announcement, game clear) ── */}
@@ -106,7 +107,7 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
       )}
 
       {/* ── Navbar ─────────────────────────────────────────────────────────── */}
-      <nav className="w-full border-b border-white/10 bg-zinc-950/80 backdrop-blur-md z-50 sticky top-0 px-6 py-3 flex items-center justify-between">
+      <nav className="w-full border-b border-white/10 bg-zinc-950/95 z-50 sticky top-0 px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2 text-sm text-zinc-400 font-medium">
           <Link href="/" className="hover:text-white transition-colors flex items-center gap-1.5">
             <Home className="w-4 h-4" /> Home
@@ -116,13 +117,38 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
           <ChevronRight className="w-4 h-4 text-zinc-600" />
           <span className="text-red-400 font-mono tracking-widest">{room.roomCode}</span>
         </div>
-        <div className="flex items-center gap-4 text-sm">
-          <div className="flex items-center gap-3 hidden sm:flex">
+        <div className="flex items-center gap-3 text-sm">
+          <div className="items-center gap-3 hidden sm:flex">
             <span className="text-zinc-500">Playing as</span>
             <span className="text-white font-bold">{session.username}</span>
             {isHost && <Badge variant="outline" className="border-yellow-500/40 bg-yellow-950/30 text-yellow-400 text-xs">HOST</Badge>}
             {me?.isEliminated && <Badge variant="outline" className="border-red-500/40 bg-red-950/30 text-red-400 text-xs">OUT</Badge>}
           </div>
+          {/* Active rules badges — always visible */}
+          {activeRules.length > 0 && (
+            <div className="hidden md:flex items-center gap-1.5">
+              {activeRules.includes("duplicate_guard") && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-orange-500/15 text-orange-300 border border-orange-500/25 font-semibold" title="Duplicates are invalid">
+                  R1
+                </span>
+              )}
+              {activeRules.includes("exact_penalty") && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/15 text-red-300 border border-red-500/25 font-semibold" title="Exact match = others lose -2">
+                  R2
+                </span>
+              )}
+              {activeRules.includes("zero_hundred") && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/25 font-semibold" title="0/100 RPS override">
+                  R3
+                </span>
+              )}
+            </div>
+          )}
+          {eliminationCount > 0 && (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20 font-mono font-bold" title="Total eliminations">
+              💀 {eliminationCount}
+            </span>
+          )}
           <RulesDrawer activeRules={activeRules} eliminationCount={eliminationCount} />
         </div>
       </nav>
@@ -157,7 +183,7 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
 
           {/* ══ RESULTS PANEL ════════════════════════════════════════════════ */}
           {showingResults && currentResult && (
-            <div className="rounded-xl border border-yellow-500/20 bg-zinc-900/80 backdrop-blur p-5 space-y-5">
+            <div className="rounded-xl border border-yellow-500/20 bg-zinc-900/95 p-5 space-y-5">
               {/* Header: stats + balance scale */}
               <div className="flex items-center justify-between flex-wrap gap-4">
                 <div>
@@ -237,7 +263,7 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
 
           {/* ══ MAIN CARD ════════════════════════════════════════════════════ */}
           {!(room.status === "active" && showingResults) && (
-            <Card className="border border-white/10 bg-zinc-900/60 shadow-2xl backdrop-blur-xl">
+            <Card className="border border-white/10 bg-zinc-900/95 shadow-2xl">
             <CardHeader className="border-b border-white/5 pb-5">
               <CardTitle className="text-xl text-white">
                 {room.status === "waiting"   && "⏳ Waiting for players…"}
@@ -430,7 +456,7 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
 
         {/* ══ RIGHT PANEL ══════════════════════════════════════════════════════ */}
         <div className="space-y-4">
-          <Card className="border border-white/10 bg-zinc-900/60 backdrop-blur-xl sticky top-20">
+          <Card className="border border-white/10 bg-zinc-900/95 sticky top-20">
             <CardHeader className="border-b border-white/5 py-4 px-5">
               <CardTitle className="text-base text-zinc-100 flex items-center justify-between">
                 <span>Scoreboard</span>

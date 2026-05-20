@@ -1,8 +1,8 @@
 "use client";
-// EliminationOverlay — full-screen acid pour animation shown when a player is eliminated.
-// Auto-dismisses after 3.5s. CSS-only animation for 60 FPS.
+// EliminationOverlay — full-screen acid animation when a player is eliminated.
+// Auto-dismisses after 3.5s with a hard 4.5s failsafe.
 
-import { useEffect, useState, memo } from "react";
+import { useEffect, useState, useRef, memo } from "react";
 
 interface EliminatedPlayer {
   username: string;
@@ -14,28 +14,45 @@ interface Props {
   onDismiss: () => void;
 }
 
+const DISPLAY_MS = 3500;
+const HARD_MAX_MS = 4500;
+
 export default memo(function EliminationOverlay({ eliminated, onDismiss }: Props) {
   const [visible, setVisible] = useState(true);
+  const dismissedRef = useRef(false);
 
+  function dismiss() {
+    if (dismissedRef.current) return;
+    dismissedRef.current = true;
+    setVisible(false);
+    onDismiss();
+  }
+
+  // Primary timer
   useEffect(() => {
-    const t = setTimeout(() => {
-      setVisible(false);
-      onDismiss();
-    }, 3500);
+    dismissedRef.current = false;
+    const t = setTimeout(dismiss, DISPLAY_MS);
     return () => clearTimeout(t);
-  }, [onDismiss]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Failsafe — absolutely kill it after HARD_MAX_MS
+  useEffect(() => {
+    const t = setTimeout(dismiss, HARD_MAX_MS);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (!visible || eliminated.length === 0) return null;
 
-  // Acid drop positions (stable — computed once per render)
   const drops = [0, 1, 2, 3, 4, 5, 6];
 
   return (
     <div
-      className="fixed inset-0 z-[200] flex flex-col items-center justify-center
-                 bg-black/90 backdrop-blur-sm kod-fade-in"
+      className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-black/90 kod-fade-in"
       role="alertdialog"
       aria-label="Player eliminated"
+      onClick={dismiss}
     >
       {/* Acid SVG */}
       <svg
@@ -44,16 +61,13 @@ export default memo(function EliminationOverlay({ eliminated, onDismiss }: Props
         xmlns="http://www.w3.org/2000/svg"
         aria-hidden
       >
-        {/* Dripping acid drops from top */}
         <g className="kod-acid-container" style={{ transformOrigin: "150px 0px" }}>
-          {/* Main acid pool */}
           <rect
             x="60" y="0" width="180" height="60"
             fill="rgba(180,255,0,0.85)"
             className="kod-acid-glow"
             rx="4"
           />
-          {/* Pool drips */}
           {drops.map((i) => (
             <ellipse
               key={i}
@@ -83,7 +97,7 @@ export default memo(function EliminationOverlay({ eliminated, onDismiss }: Props
         ))}
       </div>
 
-      <p className="mt-8 text-zinc-600 text-xs animate-pulse">Continuing in a moment…</p>
+      <p className="mt-8 text-zinc-600 text-xs animate-pulse">Tap anywhere or wait…</p>
     </div>
   );
 });
