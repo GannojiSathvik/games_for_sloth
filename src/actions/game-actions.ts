@@ -275,12 +275,16 @@ export async function advanceRound(roomId: string) {
     .where(and(eq(rounds.roomId, roomId), eq(rounds.roundNumber, room.currentRound))).limit(1);
   if (!currentRound || currentRound.status !== "completed") return;
 
-  // Guard: if the next round already exists, don't double-advance
+  // Guard: if the next round already exists, another client beat us here.
+  // Only sync the room pointer — do NOT re-run eliminations (would double-count).
   const nextRoundNumber = room.currentRound + 1;
   const [nextExists] = await db.select({ id: rounds.id }).from(rounds)
     .where(and(eq(rounds.roomId, roomId), eq(rounds.roundNumber, nextRoundNumber))).limit(1);
   if (nextExists) {
-    await db.update(gameRooms).set({ currentRound: nextRoundNumber, updatedAt: new Date() }).where(eq(gameRooms.id, roomId));
+    // Conditional update: only move pointer forward, never backward
+    await db.update(gameRooms)
+      .set({ currentRound: nextRoundNumber, updatedAt: new Date() })
+      .where(and(eq(gameRooms.id, roomId), sql`${gameRooms.currentRound} < ${nextRoundNumber}`));
     revalidatePath(`/room/${roomId}`);
     return;
   }
@@ -343,37 +347,26 @@ export async function advanceRound(roomId: string) {
   }
 
   // ── Start next round ──────────────────────────────────────────────────────
-  const nextRound = room.currentRound + 1;
-
-  // New rules just unlocked this advance → give players 5 minutes to read them
   const oldRuleCount = ((room.activeRules ?? []) as string[]).length;
   const isRuleIntroRound = newActiveRules.length > oldRuleCount;
   const durationMs = isRuleIntroRound ? 5 * 60 * 1000 : room.roundDuration * 1000;
   const deadline = new Date(Date.now() + durationMs);
 
+  // Atomic insert — safe if two clients race: onConflictDoNothing prevents duplicates
   const inserted = await db.insert(rounds).values({
-    roomId, roundNumber: nextRound, status: "submitting", submissionDeadline: deadline,
+    roomId, roundNumber: nextRoundNumber, status: "submitting", submissionDeadline: deadline,
   }).onConflictDoNothing().returning();
 
-  // If another client already created this round, just sync state and return.
-  if (inserted.length === 0) {
-    if (room.currentRound < nextRound) {
-      await db.update(gameRooms)
-        .set({ currentRound: nextRound, eliminationCount: totalEliminations, activeRules: newActiveRules, updatedAt: new Date() })
-        .where(eq(gameRooms.id, roomId));
-    }
-    revalidatePath(`/room/${roomId}`);
-    return;
-  }
-
-  const newRound = inserted[0];
-
-  // Update currentRound AND the progressive rule state
+  // Always update gameRooms (idempotent) — ensures eliminationCount + rules are correct
   await db.update(gameRooms)
-    .set({ currentRound: nextRound, eliminationCount: totalEliminations, activeRules: newActiveRules, updatedAt: new Date() })
+    .set({ currentRound: nextRoundNumber, eliminationCount: totalEliminations, activeRules: newActiveRules, updatedAt: new Date() })
     .where(eq(gameRooms.id, roomId));
 
-  await submitAIGuessesForRound(newRound.id, roomId);
+  // Submit AI guesses only if we were the one who created the round row
+  if (inserted.length > 0) {
+    await submitAIGuessesForRound(inserted[0].id, roomId);
+  }
+
   revalidatePath(`/room/${roomId}`);
 }
 

@@ -1,6 +1,6 @@
 "use client";
-// CountdownTimer — reads deadline directly, no delay state (resistant to remounts)
-// The RoundBanner covers it visually for its 2s duration.
+// CountdownTimer — reads deadline directly, immune to remounts.
+// Uses sessionStorage to prevent double-resolve across refreshes.
 
 import { useEffect, useRef, useState } from "react";
 import { resolveCurrentRound } from "@/actions/game-actions";
@@ -14,7 +14,9 @@ export default function CountdownTimer({ deadline, roomId }: Props) {
   const resolvedRef  = useRef(false);
   const prevDeadline = useRef(deadline);
 
-  // Reset resolve guard when deadline changes (new round)
+  // Stable sessionStorage key per (room, deadline)
+  const resolveKey = `kod_resolved_${roomId}_${deadline}`;
+
   if (prevDeadline.current !== deadline) {
     prevDeadline.current = deadline;
     resolvedRef.current  = false;
@@ -28,10 +30,15 @@ export default function CountdownTimer({ deadline, roomId }: Props) {
       const left = Math.max(0, Math.ceil((new Date(deadline).getTime() - Date.now()) / 1000));
       setSecondsLeft(left);
       if (left === 0 && !resolvedRef.current) {
+        // Deduplicate across refreshes
+        if (typeof window !== "undefined" && sessionStorage.getItem(resolveKey)) return;
         resolvedRef.current = true;
+        if (typeof window !== "undefined") sessionStorage.setItem(resolveKey, "1");
+
         resolveCurrentRound(roomId).catch((err) => {
-          console.error(err);
+          console.error("resolveCurrentRound failed:", err);
           resolvedRef.current = false;
+          if (typeof window !== "undefined") sessionStorage.removeItem(resolveKey);
         });
       }
     }

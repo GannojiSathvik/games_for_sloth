@@ -1,7 +1,7 @@
 "use client";
 // GameOverlays — client-side overlay manager.
-// Reads room state changes and shows EliminationOverlay and RuleAnnouncement
-// based on props passed down from the server component.
+// Uses eliminationCount (from room DB) as the stable trigger for the elimination
+// overlay, not the array length (which can change for unrelated reasons).
 
 import { useState, useEffect, useRef, memo, useCallback } from "react";
 import EliminationOverlay from "./EliminationOverlay";
@@ -11,21 +11,21 @@ import GameClearScreen    from "./GameClearScreen";
 interface EliminatedPlayer { username: string; score: number; }
 
 interface Props {
-  // Elimination: pass newly-eliminated players (derived from last advanceRound)
   newlyEliminated: EliminatedPlayer[];
-  // Rule intro: pass the new rule id + round deadline if it's a rule-intro round
-  newRuleId:      string | null;
-  deadlineIso:    string | null;
+  // Room's official elimination counter — only increments when advanceRound fires
+  eliminationCount: number;
+  newRuleId:        string | null;
+  deadlineIso:      string | null;
   isRuleIntroRound: boolean;
-  // Game clear
-  isFinished: boolean;
-  winnerUsername: string | null;
-  winnerScore:    number | null;
-  isWinnerMe:     boolean;
+  isFinished:       boolean;
+  winnerUsername:   string | null;
+  winnerScore:      number | null;
+  isWinnerMe:       boolean;
 }
 
 export default memo(function GameOverlays({
   newlyEliminated,
+  eliminationCount,
   newRuleId,
   deadlineIso,
   isRuleIntroRound,
@@ -34,18 +34,20 @@ export default memo(function GameOverlays({
   winnerScore,
   isWinnerMe,
 }: Props) {
-  const [showElim,  setShowElim]  = useState(false);
-  const [showRule,  setShowRule]  = useState(false);
-  const prevElimRef  = useRef(newlyEliminated.length);
+  const [showElim, setShowElim] = useState(false);
+  const [showRule, setShowRule] = useState(false);
+
+  // Initialize refs to the CURRENT values so we don't fire on first load
+  const prevCountRef = useRef(eliminationCount);
   const prevRuleRef  = useRef<string | null>(newRuleId);
 
-  // Trigger elimination overlay when new players are eliminated
+  // Trigger elimination overlay ONLY when eliminationCount increases
   useEffect(() => {
-    if (newlyEliminated.length > prevElimRef.current) {
-      prevElimRef.current = newlyEliminated.length;
+    if (eliminationCount > prevCountRef.current) {
+      prevCountRef.current = eliminationCount;
       setShowElim(true);
     }
-  }, [newlyEliminated.length]);
+  }, [eliminationCount]);
 
   // Trigger rule announcement on new rule round
   useEffect(() => {

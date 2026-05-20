@@ -54,8 +54,9 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
     ? activeRules[activeRules.length - 1]
     : null;
 
-  // Overlay props
-  const newlyEliminated = players
+  // Overlay props — pass all eliminated players; GameOverlays uses eliminationCount
+  // to detect WHEN new eliminations happen (avoids false triggers on page load)
+  const eliminatedPlayers = players
     .filter(p => p.isEliminated)
     .map(p => ({ username: p.username, score: p.score }));
 
@@ -82,11 +83,12 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
       </video>
       {/* Dark overlay on top of video for legibility */}
       <div className="fixed inset-0 z-[1] bg-black/40 pointer-events-none" />
-      <RoomPoller intervalMs={2000} />
+      <RoomPoller />
 
       {/* ── Client-side overlays (elimination, rule announcement, game clear) ── */}
       <GameOverlays
-        newlyEliminated={newlyEliminated}
+        newlyEliminated={eliminatedPlayers}
+        eliminationCount={eliminationCount}
         newRuleId={newRuleId}
         deadlineIso={currentRound?.submissionDeadline?.toISOString() ?? null}
         isRuleIntroRound={isRuleIntroRound}
