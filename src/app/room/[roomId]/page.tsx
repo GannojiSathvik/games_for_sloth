@@ -47,9 +47,11 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
   const activeRules = (room.activeRules ?? []) as string[];
   const eliminationCount = room.eliminationCount ?? 0;
 
-  // Detect rule-intro round: submission window is much longer than normal
+  // Detect rule-intro round: round deadline is longer than the normal round duration
+  // (we give 1 min for rule intros vs. the configured timer)
+  const normalRoundMs = (room.roundDuration ?? 30) * 1000;
   const isRuleIntroRound = !!currentRound?.submissionDeadline &&
-    (new Date(currentRound.submissionDeadline).getTime() - currentRound.createdAt.getTime()) > 3 * 60 * 1000;
+    (new Date(currentRound.submissionDeadline).getTime() - currentRound.createdAt.getTime()) > normalRoundMs + 5000;
 
   // Derive the newest unlocked rule (last element of activeRules)
   const newRuleId = isRuleIntroRound && activeRules.length > 0
@@ -242,7 +244,7 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
                 ))}
               </div>
 
-              <p className="text-xs text-zinc-700">Winner ±0 · Loser −1 · Exact match (Rule 2) −2 · Duplicate (Rule 1) −1 · Skip −1 · 3 skips = eliminated</p>
+              <p className="text-xs text-zinc-700">Winner ±0 · Loser −1 · Exact match (Rule 2) −2 · Duplicate (Rule 1) −1 · Miss = 0 counted as guess</p>
 
               {currentResult.resolvedAt && (
                 <ResultTimer resolvedAt={currentResult.resolvedAt.toISOString()} roomId={roomId} resultDisplayMs={20000} />
@@ -263,7 +265,7 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
                 <CardDescription className="text-zinc-400">
                   {room.status === "waiting" && "Share the invite link. Host sets game rules."}
                   {room.status === "active" && showingResults && "Results shown above — next round starts soon."}
-                  {room.status === "active" && !showingResults && `Guess 0–100. Target = 80% of avg. Elimination ≤ ${room.eliminationScore}. 3 skips = kicked.`}
+                  {room.status === "active" && !showingResults && `Guess 0–100. Target = 80% of avg. Elimination ≤ ${room.eliminationScore}. Submit before time runs out!`}
                   {room.status === "finished" && "The last player standing wins!"}
                 </CardDescription>
               </CardHeader>
@@ -288,7 +290,7 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
                       <div className="space-y-4">
                         <p className="text-sm text-zinc-400">
                           You are the <span className="text-yellow-400 font-semibold">host</span>.
-                          Needs ≥ 3 players — bots auto-fill if short.
+                          Needs ≥ 2 players — bots auto-fill if short.
                         </p>
 
                         <div className="rounded-xl bg-zinc-950/50 border border-white/5 p-4 space-y-3">
@@ -359,13 +361,19 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
                         <div className="flex flex-col items-center gap-1">
                           <CountdownTimer deadline={currentRound.submissionDeadline.toISOString()} roomId={roomId} />
                           {isRuleIntroRound && (
-                            <span className="text-[10px] text-orange-400 font-semibold tracking-wider">5-MIN RULE INTRO</span>
+                            <span className="text-[10px] text-orange-400 font-semibold tracking-wider">1-MIN RULE INTRO</span>
                           )}
                         </div>
                       )}
                       <div className="flex-1 min-w-0">
                         {me && !me.isEliminated && !iHaveSubmitted && (
-                          <GuessForm playerId={me.id} roundId={currentRound.id} roomId={roomId} />
+                          <GuessForm
+                            playerId={me.id}
+                            roundId={currentRound.id}
+                            roomId={roomId}
+                            activeRules={activeRules}
+                            activePlayers={players.filter(p => !p.isEliminated).length}
+                          />
                         )}
                         {iHaveSubmitted && !me?.isEliminated && (
                           <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-5 flex items-center gap-4">
@@ -456,7 +464,7 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
                   {players.filter(p => !p.isEliminated).length} alive / {players.length}
                 </span>
               </CardTitle>
-              <p className="text-xs text-zinc-700">Elim at ≤ {room.eliminationScore} · 3 consecutive skips = kicked</p>
+              <p className="text-xs text-zinc-700">Elim at ≤ {room.eliminationScore} · Submit before timer ends!</p>
             </CardHeader>
             <CardContent className="p-0">
               <ul className="divide-y divide-white/5 max-h-[40vh] overflow-y-auto">

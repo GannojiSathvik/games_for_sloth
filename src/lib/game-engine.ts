@@ -112,40 +112,63 @@ export function calculateRound(
   const averageGuess = sumAll / guesses.length;
   const targetNumber = averageGuess * 0.8;
 
-  // ── Rule 3: 2-player RPS override ─────────────────────────────────────────
-  if (hasRule(GAME_RULES.ZERO_HUNDRED) && totalActivePlayers === 2 && guesses.length === 2) {
+  // ── 2-player RPS override ─────────────────────────────────────────────────
+  // Whenever exactly 2 players remain, FORCE RPS scoring (0/1/100 only).
+  // This applies regardless of whether the zero_hundred rule is "unlocked"
+  // — the UI already forces players to pick from those 3 values when len=2.
+  if (totalActivePlayers === 2 && guesses.length === 2) {
+    triggeredRules.push(GAME_RULES.ZERO_HUNDRED);
     const vals = guesses.map((g) => g.value);
     const [a, b] = vals;
 
-    // RPS lookup: [chooserA, chooserB] → winner value (null = no RPS match)
+    // RPS lookup: winner value, or null = tie (same number picked)
     const rpsWinner = (() => {
       if ((a === 100 && b === 0) || (a === 0 && b === 100)) return 100; // 100 beats 0
       if ((a === 0 && b === 1) || (a === 1 && b === 0)) return 0;       // 0 beats 1
       if ((a === 1 && b === 100) || (a === 100 && b === 1)) return 1;   // 1 beats 100
-      return null;
+      return null; // tied — both picked same number
     })();
 
-    if (rpsWinner !== null) {
-      triggeredRules.push(GAME_RULES.ZERO_HUNDRED);
-      const winnerSet = new Set(guesses.filter((g) => g.value === rpsWinner).map((g) => g.playerId));
+    // Tie: both lose -1, no winner
+    if (rpsWinner === null) {
       return {
         targetNumber,
         averageGuess,
-        winnerPlayerIds: [...winnerSet],
+        winnerPlayerIds: [],
         isExactMatch: false,
-        scoreDelta: { winners: 0, losers: -1 },
+        scoreDelta: { winners: -1, losers: -1 },
         triggeredRules,
         breakdown: guesses.map((g) => ({
           playerId: g.playerId,
           value: g.value,
           deviation: Math.abs(g.value - targetNumber),
-          isWinner: winnerSet.has(g.playerId),
+          isWinner: false,
           isExactMatch: false,
-          scoreDelta: winnerSet.has(g.playerId) ? 0 : -1,
+          scoreDelta: -1,
           isDuplicatePenalty: false,
         })),
       };
     }
+
+    // Clear winner
+    const winnerSet = new Set(guesses.filter((g) => g.value === rpsWinner).map((g) => g.playerId));
+    return {
+      targetNumber,
+      averageGuess,
+      winnerPlayerIds: [...winnerSet],
+      isExactMatch: false,
+      scoreDelta: { winners: 0, losers: -1 },
+      triggeredRules,
+      breakdown: guesses.map((g) => ({
+        playerId: g.playerId,
+        value: g.value,
+        deviation: Math.abs(g.value - targetNumber),
+        isWinner: winnerSet.has(g.playerId),
+        isExactMatch: false,
+        scoreDelta: winnerSet.has(g.playerId) ? 0 : -1,
+        isDuplicatePenalty: false,
+      })),
+    };
   }
 
   // ── Rule 1: Duplicate Guard ────────────────────────────────────────────────

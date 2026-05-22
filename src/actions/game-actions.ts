@@ -5,7 +5,7 @@ import { gameRooms, players, rounds, guesses, users } from "@/db/schema";
 import { calculateRound, computeActiveRules } from "@/lib/game-engine";
 import { pickBotNames } from "@/lib/bot-names";
 import { getSmartAIGuess } from "@/lib/bot-ai";
-import { eq, and, sql, desc } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { nanoid } from "nanoid";
 
@@ -100,6 +100,7 @@ export async function addAIPlayers(roomId: string, count: number) {
 export async function submitAIGuessesForRound(roundId: string, roomId: string) {
   const [room] = await db.select().from(gameRooms).where(eq(gameRooms.id, roomId)).limit(1);
   const roundNumber = room?.currentRound ?? 1;
+  const activeRules = (room?.activeRules ?? []) as string[];
 
   const aiPlayers = await db
     .select({ id: players.id, username: users.username })
@@ -114,7 +115,7 @@ export async function submitAIGuessesForRound(roundId: string, roomId: string) {
     .where(and(eq(players.roomId, roomId), eq(players.isEliminated, false)));
 
   for (const ai of aiPlayers) {
-    const guessValue = getSmartAIGuess(roundNumber, total);
+    const guessValue = getSmartAIGuess(roundNumber, total, undefined, activeRules);
     await db.insert(guesses).values({ roundId, playerId: ai.id, value: guessValue }).onConflictDoNothing();
   }
 }
@@ -123,7 +124,7 @@ export async function submitAIGuessesForRound(roundId: string, roomId: string) {
 // Start game (≥3 players enforced, auto-fills bots)
 // ─────────────────────────────────────────────────────────────────────────────
 
-const MIN_PLAYERS = 3;
+const MIN_PLAYERS = 2;
 
 export async function startGame(roomId: string, hostUserId: string) {
   const [room] = await db.select().from(gameRooms).where(eq(gameRooms.id, roomId)).limit(1);
@@ -134,9 +135,22 @@ export async function startGame(roomId: string, hostUserId: string) {
   const [{ total }] = await db.select({ total: sql<number>`count(*)::int` }).from(players).where(eq(players.roomId, roomId));
   if (total < MIN_PLAYERS) await addAIPlayers(roomId, MIN_PLAYERS - total);
 
-  await db.update(gameRooms).set({ status: "active", currentRound: 1, updatedAt: new Date() }).where(eq(gameRooms.id, roomId));
+  // Count final player count after any bot fill
+  const [{ finalTotal }] = await db.select({ finalTotal: sql<number>`count(*)::int` }).from(players).where(eq(players.roomId, roomId));
 
-  const deadline = new Date(Date.now() + room.roundDuration * 1000);
+  // Rule 3 unlocks immediately if the game starts with exactly 2 players
+  const startingRules: string[] = finalTotal === 2 ? ["zero_hundred"] : [];
+
+  await db.update(gameRooms).set({
+    status: "active",
+    currentRound: 1,
+    activeRules: startingRules,
+    updatedAt: new Date(),
+  }).where(eq(gameRooms.id, roomId));
+
+  // Rule 3 intro round: give 1 minute for players to read the rule
+  const durationMs = startingRules.length > 0 ? 1 * 60 * 1000 : room.roundDuration * 1000;
+  const deadline = new Date(Date.now() + durationMs);
   const [round] = await db.insert(rounds).values({
     roomId, roundNumber: 1, status: "submitting", submissionDeadline: deadline,
   }).returning();
@@ -209,7 +223,7 @@ export async function resolveRound(roundId: string) {
 
   await db.update(rounds).set({ status: "calculating" }).where(eq(rounds.id, roundId));
 
-  // Fill in -1 for anyone who never submitted
+  // Fill in 0 for anyone who never submitted (no skip penalty — equal time for all)
   const activePlayers = await db.select({ id: players.id }).from(players)
     .where(and(eq(players.roomId, round.roomId), eq(players.isEliminated, false)));
 
@@ -219,21 +233,13 @@ export async function resolveRound(roundId: string) {
   const alreadySubmitted = new Set(allGuessesRaw.map(g => g.playerId));
   for (const p of activePlayers) {
     if (!alreadySubmitted.has(p.id))
-      await db.insert(guesses).values({ roundId, playerId: p.id, value: -1 }).onConflictDoNothing();
+      await db.insert(guesses).values({ roundId, playerId: p.id, value: 0 }).onConflictDoNothing();
   }
 
   const allGuesses = await db.select({ id: guesses.id, playerId: guesses.playerId, value: guesses.value })
     .from(guesses).where(eq(guesses.roundId, roundId));
 
-  const validGuesses   = allGuesses.filter(g => g.value >= 0);
-  const skippedGuesses = allGuesses.filter(g => g.value < 0);
-
-  // -1 penalty + tag for skipped
-  for (const sg of skippedGuesses) {
-    await db.update(players).set({ score: sql`${players.score} - 1` }).where(eq(players.id, sg.playerId));
-    await db.update(guesses).set({ scoreDelta: -1, deviation: 999, isRoundWinner: false, isExactMatch: false })
-      .where(eq(guesses.id, sg.id));
-  }
+  const validGuesses = allGuesses.filter(g => g.value >= 0); // all are valid now (no skips)
 
   if (validGuesses.length > 0) {
     const activeRules = (room.activeRules ?? []) as string[];
@@ -303,29 +309,8 @@ export async function advanceRound(roomId: string) {
   const allPlayers = await db.select().from(players)
     .where(and(eq(players.roomId, roomId), eq(players.isEliminated, false)));
 
-  // ── Consecutive-skip elimination (3 skips in a row → eliminated) ──────────
-  const SKIP_LIMIT = 3;
-  const recentRounds = await db.select({ id: rounds.id, roundNumber: rounds.roundNumber })
-    .from(rounds)
-    .where(and(eq(rounds.roomId, roomId), eq(rounds.status, "completed")))
-    .orderBy(desc(rounds.roundNumber))
-    .limit(SKIP_LIMIT);
-
+  // Skip mechanic removed — no consecutive-skip eliminations
   let newEliminationsCount = 0;
-
-  for (const p of allPlayers) {
-    let consecutiveSkips = 0;
-    for (const r of recentRounds) {
-      const [g] = await db.select({ value: guesses.value }).from(guesses)
-        .where(and(eq(guesses.roundId, r.id), eq(guesses.playerId, p.id))).limit(1);
-      if (!g || g.value < 0) consecutiveSkips++;
-      else break;
-    }
-    if (consecutiveSkips >= SKIP_LIMIT) {
-      await db.update(players).set({ isEliminated: true }).where(eq(players.id, p.id));
-      newEliminationsCount++;
-    }
-  }
 
   // ── Score-based elimination ───────────────────────────────────────────────
   const stillActive = await db.select().from(players)
@@ -339,9 +324,16 @@ export async function advanceRound(roomId: string) {
 
   // ── Update elimination count + unlock progressive rules ───────────────────
   const totalEliminations = (room.eliminationCount ?? 0) + newEliminationsCount;
+  // Base rules from elimination count (Rule 1 & 2)
   const newActiveRules = computeActiveRules(totalEliminations);
 
   const remaining = stillActive.filter(p => !toEliminate.find(e => e.id === p.id));
+
+  // ── Rule 3 unlocks automatically when exactly 2 players remain ────────────
+  // This is player-count based, not elimination-count based.
+  if (remaining.length === 2 && !newActiveRules.includes("zero_hundred")) {
+    newActiveRules.push("zero_hundred");
+  }
 
   // ── Game over? ────────────────────────────────────────────────────────────
   if (remaining.length <= 1) {
@@ -360,7 +352,7 @@ export async function advanceRound(roomId: string) {
   // ── Start next round ──────────────────────────────────────────────────────
   const oldRuleCount = ((room.activeRules ?? []) as string[]).length;
   const isRuleIntroRound = newActiveRules.length > oldRuleCount;
-  const durationMs = isRuleIntroRound ? 5 * 60 * 1000 : room.roundDuration * 1000;
+  const durationMs = isRuleIntroRound ? 1 * 60 * 1000 : room.roundDuration * 1000;
   const deadline = new Date(Date.now() + durationMs);
 
   // Atomic insert — safe if two clients race: onConflictDoNothing prevents duplicates

@@ -56,9 +56,9 @@ const RULE_DATA: Record<string, {
       glow: "shadow-[0_0_60px_rgba(168,85,247,0.3)]",
       text: "text-purple-400",
     },
-    description: "ONLY when 2 players remain. Rock-paper-scissors override: 100 beats 0 · 0 beats 1 · 1 beats 100.",
-    example: "Player A: 0, Player B: 100 → Player B wins (100 beats 0). Player A loses -1.",
-    scoring: "RPS Winner: -0 · Loser: -1",
+    description: "ONLY when 2 players remain. You MUST pick 0, 1, or 100 — no other numbers allowed. Rock-paper-scissors rules decide the winner: 100 beats 0 · 0 beats 1 · 1 beats 100. Picking the same number = tie (both lose −1).",
+    example: "Player A picks 0, Player B picks 100 → Player B wins (100 beats 0). Player A loses −1. If both pick 1 → tie, both lose −1.",
+    scoring: "RPS Winner: +0 · Loser: −1 · Tie (same pick): −1 each",
   },
 };
 

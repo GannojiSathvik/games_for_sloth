@@ -12,7 +12,7 @@ const RULES = [
     icon: Zap,
     color: "emerald",
     always: true,
-    description: "Each player picks a number from 0–100. The target is 80% of the average. Closest to the target wins the round.",
+    description: "Each player picks a number from 0–100. The target is 80% of the average. Closest to the target wins the round. You MUST submit before the timer runs out!",
     scoring: "Winner: -0 (no penalty) · Others: -1",
   },
   {
@@ -39,8 +39,8 @@ const RULES = [
     icon: Swords,
     color: "purple",
     unlockAt: 3,
-    description: "Only when 2 players remain. Rock-paper-scissors: 100 beats 0, 0 beats 1, 1 beats 100. If the combo doesn't match, normal rules apply.",
-    scoring: "RPS Winner: -0 · Loser: -1",
+    description: "Only when 2 players remain. You MUST pick 0, 1, or 100 — no other numbers allowed. Rock-paper-scissors decides: 100 beats 0, 0 beats 1, 1 beats 100. Same pick = tie (both lose −1).",
+    scoring: "RPS Winner: +0 · Loser: −1 · Tie: −1 each",
   },
 ];
 
@@ -117,11 +117,6 @@ export default function RulesOverview() {
             <Skull className="w-5 h-5 text-red-500 mx-auto mb-1" />
             <p className="text-xs text-zinc-400">Eliminated</p>
             <p className="text-sm font-bold font-mono text-red-400">≤ -10</p>
-          </div>
-          <div className="bg-black/30 rounded-lg p-3 border border-white/5">
-            <Skull className="w-5 h-5 text-orange-400 mx-auto mb-1" />
-            <p className="text-xs text-zinc-400">3 Skips</p>
-            <p className="text-sm font-bold font-mono text-red-500">OUT</p>
           </div>
         </div>
       </div>

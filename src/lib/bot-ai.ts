@@ -25,12 +25,27 @@ type BotPersonality =
  * @param roundNumber  Current round (1-indexed). Bots get smarter in later rounds.
  * @param totalPlayers Total active (non-eliminated) players this round.
  * @param personality  The bot's assigned personality (random if not given).
+ * @param activeRules  Currently unlocked rules (used to detect RPS mode).
  */
 export function getSmartAIGuess(
   roundNumber: number,
   totalPlayers: number,
   personality?: BotPersonality,
+  activeRules: string[] = [],
 ): number {
+  // ── 2-player mode: ALWAYS pick from 0, 1, or 100 ──────────────────────────
+  // When exactly 2 players remain, the UI forces picks from these 3 values
+  // and the engine applies RPS scoring — bots must do the same.
+  if (totalPlayers === 2) {
+    const rpsChoices = [0, 1, 100];
+    const r = Math.random();
+    // Rotate the favoured pick each round so bots aren't trivially predictable
+    const offset = roundNumber % 3;
+    if (r < 0.50) return rpsChoices[offset];           // 50%
+    if (r < 0.80) return rpsChoices[(offset + 1) % 3]; // 30%
+    return rpsChoices[(offset + 2) % 3];               // 20%
+  }
+
   // Assign a random personality if none given
   const p = personality ?? pickPersonality();
 

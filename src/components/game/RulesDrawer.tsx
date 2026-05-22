@@ -31,8 +31,8 @@ const ALL_RULES = [
     unlockAt: 3,
     unlockLabel: "After 3rd elimination",
     color: "purple",
-    description: "ONLY active when exactly 2 players remain. Special rock-paper-scissors: 100 beats 0 · 0 beats 1 · 1 beats 100. If this combo doesn't apply, normal rules run.",
-    example: "Player A: 0, Player B: 100 → Player B wins (100 beats 0).",
+    description: "ONLY when 2 players remain. You MUST pick 0, 1, or 100. Rock-paper-scissors: 100 beats 0 · 0 beats 1 · 1 beats 100. Same pick = tie (both lose −1).",
+    example: "Player A picks 0, Player B picks 100 → Player B wins. If both pick 100 → tie, both lose −1.",
   },
 ];
 
@@ -157,12 +157,8 @@ export default function RulesDrawer({ activeRules, eliminationCount }: { activeR
                 <span className="text-red-400 font-mono font-bold">-1</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-zinc-400">Skip / No submit</span>
-                <span className="text-red-400 font-mono font-bold">-1</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-zinc-400">3 consecutive skips</span>
-                <span className="text-red-500 font-mono font-bold">ELIMINATED</span>
+                <span className="text-zinc-400">Miss (timer out)</span>
+                <span className="text-zinc-500 font-mono font-bold">→ 0 submitted</span>
               </div>
             </div>
             <div className="mt-3 pt-3 border-t border-white/5">

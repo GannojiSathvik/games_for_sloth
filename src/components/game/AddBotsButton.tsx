@@ -14,7 +14,7 @@ export default function AddBotsButton({ roomId }: Props) {
   const [state, action, isPending] = useActionState(
     async (_prev: typeof initial, fd: FormData) => {
       const raw   = fd.get("botCount");
-      const count = Math.max(1, Math.min(20, parseInt(raw as string) || 3));
+      const count = Math.max(1, Math.min(20, parseInt(raw as string) || 1));
       try {
         await addAIPlayers(roomId, count);
         return { success: true, error: "", added: count };
@@ -35,7 +35,7 @@ export default function AddBotsButton({ roomId }: Props) {
           type="number"
           min="1"
           max="20"
-          defaultValue="3"
+          defaultValue="1"
           disabled={isPending}
           className="bg-zinc-900 border-white/10 text-white h-10"
         />
