@@ -3,10 +3,15 @@
 This document outlines the architecture, features, and major bug fixes implemented in the "King of Diamonds" (Beauty Contest) multiplayer game engine.
 
 ## 🎮 Game Overview
-A highly scalable, real-time multiplayer game based on Alice in Borderland. Players pick a number between 0 and 100. The target number is **80% of the average** of all guesses. 
-- **Closest Guess**: +1 / -1
-- **Exact Match**: +2 / -2
-- **Elimination**: Players are eliminated when their score drops below the host-defined threshold (e.g., -10) or if they skip 3 consecutive rounds.
+A real-time multiplayer game based on Alice in Borderland. Players pick a number between 0 and 100. The target number is **80% of the average** of all guesses.
+- **Closest Guess**: winner ±0, everyone else −1
+- **Exact Match (Rule 2)**: everyone except the winner loses −2
+- **No answer**: counted as a guess of 0 — there is no skip mechanic
+- **Elimination**: a player is out when their score reaches the host-defined threshold (default −10)
+
+The single source of truth for the scoring rules is `src/lib/game-engine.ts`, which is a pure
+function with no database or clock access. `src/lib/game-engine.test.ts` pins every rule; run it
+with `npm test`.
 
 ## 🏗️ Core Architecture
 - **Framework**: Next.js (App Router)
@@ -29,6 +34,28 @@ The game loop was completely decoupled from strict server-side chron-jobs into a
 ## 🤖 AI Integration
 - Replaced slow, blocking LLM calls with instantaneous uniform random generation (`0-100`).
 - Bots are generated and their guesses are bulk-inserted immediately when a round starts, causing zero latency to the human players.
+
+## 🔒 Trusting the Session, Not the Form
+Every server action in `src/actions/` derives **who is acting** from the httpOnly session cookie
+and looks the caller's `players` row up by `(userId, roomId)`. Server Actions are reachable by a
+direct POST once their id is known, so a `playerId` or `hostUserId` arriving in a hidden input is
+attacker-controlled input. Submitting a guess, starting the game, changing the game settings and
+kicking a player are all authorised server-side; a hand-crafted request cannot submit on a rival's
+behalf, start someone else's game, or set an out-of-range elimination threshold.
+
+## ⚔️ Concurrency Without Transactions
+The Neon HTTP driver issues each statement as its own request — there are no transactions. State
+changes are therefore guarded by **conditional updates that double as locks**:
+
+- `resolveRound` claims a round with `UPDATE rounds SET status='calculating' WHERE id=? AND
+  status='submitting' RETURNING *`. Postgres locks the row, so exactly one caller gets a result
+  even when the countdown expiry and the last submission land at the same instant. A read-then-write
+  check would let both through and apply every score delta twice.
+- `startGame` claims the `waiting → active` transition the same way, and rolls the room back to
+  `waiting` if round 1 fails to materialise.
+- `advanceRound` recounts eliminations with `SELECT count(*) ... WHERE is_eliminated` instead of
+  incrementing a stored counter, so a second, slower caller can't reset the total (and with it the
+  unlocked rules) back to zero.
 
 ## 🐛 Major Bugs Resolved
 1. **Database Race Conditions**: Fixed server crashes when multiple clients triggered `advanceRound` simultaneously. Implemented an *Insert-First* pattern using `onConflictDoNothing` relying on composite unique indexes (`roomId`, `roundNumber`).
