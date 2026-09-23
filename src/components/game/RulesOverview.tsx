@@ -3,7 +3,7 @@
 // RulesOverview — Full-page rules screen shown in the lobby BEFORE starting.
 // Displays all rules, scoring system, and progressive unlock mechanic.
 
-import { ShieldAlert, Target, Swords, Zap, Users, Trophy, Skull } from "lucide-react";
+import { ShieldAlert, Target, Swords, Zap, Users, Trophy, Skull, Timer } from "lucide-react";
 
 const RULES = [
   {
@@ -13,7 +13,7 @@ const RULES = [
     color: "emerald",
     always: true,
     description: "Each player picks a number from 0–100. The target is 80% of the average. Closest to the target wins the round. You MUST submit before the timer runs out!",
-    scoring: "Winner: -0 (no penalty) · Others: -1",
+    scoring: "Winner: ±0 (no penalty) · Others: −1",
   },
   {
     id: "duplicate_guard",
@@ -21,8 +21,8 @@ const RULES = [
     icon: ShieldAlert,
     color: "orange",
     unlockAt: 1,
-    description: "If 2+ players choose the same number, that number is INVALID. Those players each lose -1 and are excluded from winning.",
-    scoring: "Duplicates: -1 (invalid) · Remaining scored normally",
+    description: "If 2+ players choose the same number, that number is INVALID. Those players each lose −1 and are excluded from winning.",
+    scoring: "Duplicates: −1 (invalid) · Remaining scored normally",
   },
   {
     id: "exact_penalty",
@@ -30,8 +30,8 @@ const RULES = [
     icon: Target,
     color: "red",
     unlockAt: 2,
-    description: "If a player guesses the EXACT target number, all OTHER players lose -2 instead of -1. The exact match winner gets -0.",
-    scoring: "Exact winner: -0 · Others: -2",
+    description: "If a player guesses the EXACT target number, all OTHER players lose −2 instead of −1. The exact match winner gets ±0.",
+    scoring: "Exact winner: ±0 · Others: −2",
   },
   {
     id: "zero_hundred",
@@ -40,7 +40,7 @@ const RULES = [
     color: "purple",
     unlockAt: 3,
     description: "Only when 2 players remain. You MUST pick 0, 1, or 100 — no other numbers allowed. Rock-paper-scissors decides: 100 beats 0, 0 beats 1, 1 beats 100. Same pick = tie (both lose −1).",
-    scoring: "RPS Winner: +0 · Loser: −1 · Tie: −1 each",
+    scoring: "RPS winner: ±0 · Loser: −1 · Tie: −1 each",
   },
 ];
 
@@ -51,7 +51,14 @@ const COLOR_MAP: Record<string, { border: string; bg: string; icon: string; text
   purple:  { border: "border-purple-500/30",  bg: "bg-purple-500/5",  icon: "bg-purple-500/15 text-purple-400",  text: "text-purple-400",  glow: "shadow-[0_0_20px_rgba(168,85,247,0.1)]" },
 };
 
-export default function RulesOverview() {
+interface Props {
+  /** The host-chosen score a player is knocked out at. Not always −10. */
+  eliminationScore: number;
+  /** Seconds a player has to submit each round. */
+  roundDuration: number;
+}
+
+export default function RulesOverview({ eliminationScore, roundDuration }: Props) {
   return (
     <div className="w-full space-y-5">
       {/* Header */}
@@ -102,21 +109,32 @@ export default function RulesOverview() {
       {/* Quick reference */}
       <div className="rounded-xl border border-white/5 bg-zinc-900/50 p-4 space-y-3">
         <p className="text-xs text-zinc-500 font-bold uppercase tracking-wider">Quick Reference</p>
+        {/*
+          Four tiles for a four-column grid. This used to declare
+          `sm:grid-cols-4` with only three children, so every desktop lobby had
+          a dangling empty column. The round timer is the missing fact anyway —
+          it is the other setting the host just chose.
+        */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
           <div className="bg-black/30 rounded-lg p-3 border border-white/5">
             <Trophy className="w-5 h-5 text-yellow-400 mx-auto mb-1" />
             <p className="text-xs text-zinc-400">Winner</p>
-            <p className="text-sm font-bold font-mono text-emerald-400">-0</p>
+            <p className="text-sm font-bold font-mono text-emerald-400">±0</p>
           </div>
           <div className="bg-black/30 rounded-lg p-3 border border-white/5">
             <Users className="w-5 h-5 text-zinc-400 mx-auto mb-1" />
             <p className="text-xs text-zinc-400">Others</p>
-            <p className="text-sm font-bold font-mono text-red-400">-1</p>
+            <p className="text-sm font-bold font-mono text-red-400">−1</p>
+          </div>
+          <div className="bg-black/30 rounded-lg p-3 border border-white/5">
+            <Timer className="w-5 h-5 text-sky-400 mx-auto mb-1" />
+            <p className="text-xs text-zinc-400">Per round</p>
+            <p className="text-sm font-bold font-mono text-sky-300">{roundDuration}s</p>
           </div>
           <div className="bg-black/30 rounded-lg p-3 border border-white/5">
             <Skull className="w-5 h-5 text-red-500 mx-auto mb-1" />
             <p className="text-xs text-zinc-400">Eliminated</p>
-            <p className="text-sm font-bold font-mono text-red-400">≤ -10</p>
+            <p className="text-sm font-bold font-mono text-red-400">≤ {eliminationScore}</p>
           </div>
         </div>
       </div>

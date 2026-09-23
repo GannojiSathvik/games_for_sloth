@@ -12,6 +12,9 @@ import { gameRooms, players, users } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { setSession, getSession } from "@/lib/session";
+import { createFreshUser, normaliseUsername } from "@/lib/username";
+import { MAX_ROOM_PLAYERS } from "@/lib/game-engine";
+import { assertRoomHasSpace } from "@/lib/room-capacity";
 import { revalidatePath } from "next/cache";
 
 function generateRoomCode() { return nanoid(6).toUpperCase(); }
@@ -29,31 +32,11 @@ async function createUniqueRoom(hostUserId: string, maxPlayers: number, roundDur
   throw new Error("Could not generate a unique room code. Please try again.");
 }
 
-/** Insert a brand-new user row. If username is globally taken, append a short suffix. */
-async function createFreshUser(desiredUsername: string) {
-  const exact = await db.insert(users)
-    .values({ username: desiredUsername, isAi: false })
-    .onConflictDoNothing()
-    .returning();
-  if (exact.length > 0) return exact[0];
-
-  for (let i = 0; i < 5; i++) {
-    const candidate = `${desiredUsername}_${nanoid(3)}`;
-    const result = await db.insert(users)
-      .values({ username: candidate, isAi: false })
-      .onConflictDoNothing()
-      .returning();
-    if (result.length > 0) return result[0];
-  }
-  throw new Error(`Could not create user "${desiredUsername}" — please try a different name.`);
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Create Room
 // ─────────────────────────────────────────────────────────────────────────────
 export async function createRoomAction(formData: FormData) {
-  const username = (formData.get("username") as string | null)?.trim();
-  if (!username) throw new Error("Username is required.");
+  const username = normaliseUsername(formData.get("username"));
 
   // If they already have a session, reuse it — don't create a duplicate user
   const existing = await getSession();
@@ -84,7 +67,7 @@ export async function createRoomAction(formData: FormData) {
   }
 
   // Create the room — retries automatically if room code collides
-  const room = await createUniqueRoom(userId, 999, 30, -10);
+  const room = await createUniqueRoom(userId, MAX_ROOM_PLAYERS, 30, -10);
 
   await db.insert(players).values({ userId, roomId: room.id }).onConflictDoNothing();
   revalidatePath(`/room/${room.id}`);
@@ -95,9 +78,8 @@ export async function createRoomAction(formData: FormData) {
 // Join Room by Code (home page form)
 // ─────────────────────────────────────────────────────────────────────────────
 export async function joinRoomAction(formData: FormData) {
-  const username = (formData.get("username") as string | null)?.trim();
+  const username = normaliseUsername(formData.get("username"));
   const roomCode = (formData.get("roomCode") as string | null)?.trim().toUpperCase();
-  if (!username) throw new Error("Username is required.");
   if (!roomCode) throw new Error("Room code is required.");
 
   const [room] = await db.select().from(gameRooms).where(eq(gameRooms.roomCode, roomCode)).limit(1);
@@ -145,6 +127,7 @@ export async function joinRoomAction(formData: FormData) {
     await setSession({ userId, username: newUser.username });
   }
 
+  await assertRoomHasSpace(room.id, userId, room.maxPlayers);
   await db.insert(players).values({ userId, roomId: room.id }).onConflictDoNothing();
   revalidatePath(`/room/${room.id}`);
   redirect(`/room/${room.id}`);

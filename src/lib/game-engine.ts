@@ -20,6 +20,46 @@ export const GAME_RULES = {
 
 export type GameRule = (typeof GAME_RULES)[keyof typeof GAME_RULES];
 
+/**
+ * How many players (humans and bots together) one room holds.
+ *
+ * Rooms used to be created with a cap of 999 that nothing ever checked, so the
+ * field was decorative. The scoreboard, the submission chips and the results
+ * list all render one row per player, and every round costs one database write
+ * per player, so an unbounded room degrades the game for everyone in it.
+ */
+export const MAX_ROOM_PLAYERS = 20;
+
+/**
+ * Extra time granted on a round that introduces a new rule, so players get a
+ * chance to read it. A rule-intro round is always exactly this much longer than
+ * the room's configured duration, which is how the UI recognises one.
+ */
+export const RULE_INTRO_EXTRA_MS = 60_000;
+
+/** The only legal picks once the game is down to two players (Rule 3). */
+export const RPS_VALUES: number[] = [0, 1, 100];
+
+/**
+ * Who wins a 1-v-1 under the rock-paper-scissors override?
+ *   100 beats 0 · 0 beats 1 · 1 beats 100
+ *
+ * Returns the winning value, or null when nobody wins (same pick, or a pairing
+ * the cycle doesn't cover). A value outside {0, 1, 100} is illegal and simply
+ * loses — it must not drag the other player down with it.
+ */
+function rpsWinningValue(a: number, b: number): number | null {
+  const aLegal = RPS_VALUES.includes(a);
+  const bLegal = RPS_VALUES.includes(b);
+  if (!aLegal && !bLegal) return null;   // both illegal — nobody wins
+  if (!aLegal) return b;                 // only b played a legal value
+  if (!bLegal) return a;
+  if (a === b) return null;              // same pick — a draw
+  if ((a === 100 && b === 0) || (a === 0 && b === 100)) return 100;
+  if ((a === 0 && b === 1) || (a === 1 && b === 0)) return 0;
+  return 1;                              // the only remaining pairing: 1 vs 100
+}
+
 /** Total eliminations needed to unlock each rule. */
 export const RULE_UNLOCK_AT: Record<GameRule, number> = {
   duplicate_guard: 1,
@@ -118,16 +158,8 @@ export function calculateRound(
   // — the UI already forces players to pick from those 3 values when len=2.
   if (totalActivePlayers === 2 && guesses.length === 2) {
     triggeredRules.push(GAME_RULES.ZERO_HUNDRED);
-    const vals = guesses.map((g) => g.value);
-    const [a, b] = vals;
-
-    // RPS lookup: winner value, or null = tie (same number picked)
-    const rpsWinner = (() => {
-      if ((a === 100 && b === 0) || (a === 0 && b === 100)) return 100; // 100 beats 0
-      if ((a === 0 && b === 1) || (a === 1 && b === 0)) return 0;       // 0 beats 1
-      if ((a === 1 && b === 100) || (a === 100 && b === 1)) return 1;   // 1 beats 100
-      return null; // tied — both picked same number
-    })();
+    const [a, b] = guesses.map((g) => g.value);
+    const rpsWinner = rpsWinningValue(a, b);
 
     // Tie: both lose -1, no winner
     if (rpsWinner === null) {

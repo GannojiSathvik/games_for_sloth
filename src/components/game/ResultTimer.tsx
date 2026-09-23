@@ -1,12 +1,13 @@
 "use client";
 
-// ResultTimer — shown when a round is completed
-// Shows results for a duration, then calls advanceRound.
-// Uses sessionStorage to prevent re-triggering advance across refreshes.
+// ResultTimer — counts down the results screen, then advances the round.
+// Any player can press Skip to move on immediately; advanceRound is idempotent
+// on the server, so several clients firing at once is harmless.
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { advanceRound } from "@/actions/game-actions";
+import { useNow } from "@/lib/use-clock";
 
 interface Props {
   resolvedAt: string;
@@ -15,57 +16,48 @@ interface Props {
 }
 
 export default function ResultTimer({ resolvedAt, roomId, resultDisplayMs = 20000 }: Props) {
-  const router    = useRouter();
-  const [msLeft, setMsLeft] = useState<number>(resultDisplayMs);
-  const [mounted, setMounted] = useState(false);
-  const advancedRef = useRef(false);
+  const router = useRouter();
+  const now = useNow();
+  const resolvedMs = new Date(resolvedAt).getTime();
 
-  // Stable key for this specific resolved round — used to deduplicate advance calls
+  const msLeft = now === 0 ? resultDisplayMs : Math.max(0, resultDisplayMs - (now - resolvedMs));
+  const expired = now !== 0 && msLeft === 0;
+
+  // One advance attempt per resolved round, surviving refreshes within this tab.
   const advanceKey = `kod_advanced_${roomId}_${resolvedAt}`;
+  const firedRef = useRef(false);
 
-  function doAdvance() {
-    if (advancedRef.current) return;
-    // Check if this client already fired advance for this round (survives refresh)
-    if (typeof window !== "undefined" && sessionStorage.getItem(advanceKey)) return;
+  useEffect(() => {
+    firedRef.current = false;
+  }, [resolvedAt]);
 
-    advancedRef.current = true;
-    if (typeof window !== "undefined") sessionStorage.setItem(advanceKey, "1");
+  const doAdvance = useCallback(() => {
+    if (firedRef.current) return;
+    try {
+      if (sessionStorage.getItem(advanceKey)) return;
+      sessionStorage.setItem(advanceKey, "1");
+    } catch {
+      // Storage unavailable — the ref guard still covers this tab.
+    }
+    firedRef.current = true;
 
     advanceRound(roomId)
       .then(() => router.refresh())
       .catch((err) => {
         console.error("advanceRound failed:", err);
-        advancedRef.current = false;
-        if (typeof window !== "undefined") sessionStorage.removeItem(advanceKey);
+        firedRef.current = false;
+        try {
+          sessionStorage.removeItem(advanceKey);
+        } catch {}
       });
-  }
+  }, [advanceKey, roomId, router]);
 
   useEffect(() => {
-    setMounted(true);
-    // Reset on a brand new resolved round
-    advancedRef.current = false;
-
-    const resolvedTime = new Date(resolvedAt).getTime();
-
-    function tick() {
-      const elapsed = Date.now() - resolvedTime;
-      const left    = Math.max(0, resultDisplayMs - elapsed);
-      setMsLeft(left);
-      if (left === 0) doAdvance();
-    }
-
-    tick();
-    const id = setInterval(tick, 200);
-    return () => clearInterval(id);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resolvedAt, roomId, resultDisplayMs]);
-
-  if (!mounted) {
-    return <div className="flex items-center gap-3 h-8" />;
-  }
+    if (expired) doAdvance();
+  }, [expired, doAdvance]);
 
   const seconds = Math.ceil(msLeft / 1000);
-  const pct     = (msLeft / resultDisplayMs) * 100;
+  const pct = (msLeft / resultDisplayMs) * 100;
 
   return (
     <div className="flex items-center gap-3">

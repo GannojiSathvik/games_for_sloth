@@ -70,11 +70,20 @@ export default function HomePage() {
         <p className="max-w-md text-lg text-zinc-400">
           Guess <span className="font-semibold text-red-400">80% of the average</span>. Get closest — or get eliminated.
         </p>
+        {/*
+          These chips are the first thing a new player reads, so they have to
+          match src/lib/game-engine.ts exactly. They used to advertise
+          "+1 / −1" for the closest guess and "+2 / −2" for an exact hit —
+          neither of which the engine has ever done. Nobody gains points in
+          this game: the winner simply avoids the loss, which is what makes a
+          long game a slow bleed rather than a race.
+        */}
         <div className="mt-2 flex flex-wrap justify-center gap-2 text-xs">
           {[
-            { label: "Closest guess", delta: "+1 / −1", color: "text-emerald-400 border-emerald-700/40 bg-emerald-950/40" },
-            { label: "Exact match",   delta: "+2 / −2", color: "text-yellow-400 border-yellow-700/40 bg-yellow-950/40" },
-            { label: "Score ≤ −10",   delta: "Eliminated", color: "text-red-400 border-red-700/40 bg-red-950/40" },
+            { label: "Closest guess", delta: "±0", color: "text-emerald-400 border-emerald-700/40 bg-emerald-950/40" },
+            { label: "Everyone else", delta: "−1", color: "text-zinc-300 border-zinc-700/40 bg-zinc-900/60" },
+            { label: "Exact hit (Rule 2)", delta: "others −2", color: "text-yellow-400 border-yellow-700/40 bg-yellow-950/40" },
+            { label: "Hit the floor", delta: "Eliminated", color: "text-red-400 border-red-700/40 bg-red-950/40" },
           ].map((r) => (
             <span key={r.label} className={`rounded-full border px-3 py-1 backdrop-blur ${r.color}`}>
               {r.label} → <strong>{r.delta}</strong>
@@ -118,6 +127,7 @@ export default function HomePage() {
                   name="username"
                   placeholder="Enter your name"
                   required
+                  maxLength={24}
                   className="border-white/10 bg-zinc-800 text-white placeholder:text-zinc-600"
                 />
               </div>
@@ -139,6 +149,7 @@ export default function HomePage() {
                   name="username"
                   placeholder="Enter your name"
                   required
+                  maxLength={24}
                   className="border-white/10 bg-zinc-800 text-white placeholder:text-zinc-600"
                 />
               </div>

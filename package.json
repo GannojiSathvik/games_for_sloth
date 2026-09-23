@@ -11,7 +11,8 @@
     "db:migrate": "drizzle-kit migrate",
     "db:migrate:run": "npx --yes tsx src/db/migrate.ts",
     "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "test": "tsx --test src/**/*.test.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",

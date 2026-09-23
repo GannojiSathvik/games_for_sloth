@@ -1,53 +1,26 @@
 "use client";
 
-// RoundBanner — shows for exactly 2 seconds after a round starts.
-// Hard max timeout of 3s guarantees it ALWAYS dismisses, even if
-// the deadline calculation is wrong or the component remounts.
+// RoundBanner — a 2-second "Round N" splash when a round opens.
+// Visibility is derived from the round's own start timestamp, so there is no
+// state and no timeout to get stuck: once the clock passes the window, the
+// component simply renders nothing.
 
-import { useEffect, useState, useRef } from "react";
+import { useNow } from "@/lib/use-clock";
 
 interface Props {
   roundNumber: number;
-  submissionDeadline: string;
-  roundDurationSecs: number;
+  /** ISO timestamp of when this round row was created. */
+  roundStartedAt: string;
 }
 
 const BANNER_MS = 2000;
-const HARD_MAX_MS = 3000; // absolute failsafe — never show longer than this
 
-export default function RoundBanner({ roundNumber, submissionDeadline, roundDurationSecs }: Props) {
-  const [visible, setVisible] = useState(false);
-  const mountTime = useRef(Date.now());
+export default function RoundBanner({ roundNumber, roundStartedAt }: Props) {
+  const now = useNow();
+  const startedMs = new Date(roundStartedAt).getTime();
 
-  useEffect(() => {
-    mountTime.current = Date.now();
-
-    const deadlineMs = new Date(submissionDeadline).getTime();
-    const roundStartsAt = deadlineMs - roundDurationSecs * 1000;
-    const bannerEndsAt = roundStartsAt + BANNER_MS;
-    const msLeft = bannerEndsAt - Date.now();
-
-    // Already expired — don't show
-    if (msLeft <= 0) {
-      setVisible(false);
-      return;
-    }
-
-    // Clamp to HARD_MAX so it never sticks
-    const actualMs = Math.min(msLeft, HARD_MAX_MS);
-    setVisible(true);
-
-    const timer = setTimeout(() => setVisible(false), actualMs);
-    return () => clearTimeout(timer);
-  }, [submissionDeadline, roundDurationSecs]);
-
-  // Failsafe: if somehow still visible after HARD_MAX, kill it
-  useEffect(() => {
-    if (!visible) return;
-    const kill = setTimeout(() => setVisible(false), HARD_MAX_MS);
-    return () => clearTimeout(kill);
-  }, [visible]);
-
+  // now === 0 means the clock hasn't started (SSR / pre-hydration): stay hidden.
+  const visible = now !== 0 && now >= startedMs && now < startedMs + BANNER_MS;
   if (!visible) return null;
 
   return (

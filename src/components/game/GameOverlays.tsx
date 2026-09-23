@@ -11,28 +11,29 @@ import GameClearScreen    from "./GameClearScreen";
 interface EliminatedPlayer { username: string; score: number; }
 
 interface Props {
+  /** Only the players knocked out by the round that just finished. */
   newlyEliminated: EliminatedPlayer[];
   // Room's official elimination counter — only increments when advanceRound fires
   eliminationCount: number;
   newRuleId:        string | null;
-  deadlineIso:      string | null;
   isRuleIntroRound: boolean;
   isFinished:       boolean;
   winnerUsername:   string | null;
   winnerScore:      number | null;
   isWinnerMe:       boolean;
+  roundsPlayed:     number;
 }
 
 export default memo(function GameOverlays({
   newlyEliminated,
   eliminationCount,
   newRuleId,
-  deadlineIso,
   isRuleIntroRound,
   isFinished,
   winnerUsername,
   winnerScore,
   isWinnerMe,
+  roundsPlayed,
 }: Props) {
   const [showElim, setShowElim] = useState(false);
   const [showRule, setShowRule] = useState(false);
@@ -81,6 +82,8 @@ export default memo(function GameOverlays({
           winnerUsername={winnerUsername}
           winnerScore={winnerScore ?? 0}
           isMe={isWinnerMe}
+          roundsPlayed={roundsPlayed}
+          eliminationCount={eliminationCount}
         />
       )}
     </>

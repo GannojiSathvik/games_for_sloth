@@ -1,12 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getRoomState, startGame, resolveCurrentRound, kickPlayer } from "@/actions/game-actions";
+import { getRoomState, forceResolveAction, kickPlayer } from "@/actions/game-actions";
 import { getSession } from "@/lib/session";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { ChevronRight, Home } from "lucide-react";
 import CopyRoomLink from "@/components/game/CopyRoomLink";
@@ -22,6 +20,7 @@ import BalanceScale from "@/components/game/BalanceScale";
 import GameOverlays from "@/components/game/GameOverlays";
 import AnimatedBackground from "@/components/game/AnimatedBackground";
 import RulesOverview from "@/components/game/RulesOverview";
+import GameSettingsPanel from "@/components/game/GameSettingsPanel";
 
 export default async function RoomPage({ params }: { params: Promise<{ roomId: string }> }) {
   const { roomId } = await params;
@@ -39,7 +38,8 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
     );
   }
 
-  const { room, players, currentRound, submittedPlayerIds, submittedValues, showingResults, currentResult } = state;
+  const { room, players, currentRound, submittedPlayerIds, submittedValues, showingResults,
+          isRuleIntroRound, newlyEliminated, currentResult } = state;
   const winner = players.find(p => p.isWinner);
   const me = players.find(p => p.userId === session.userId);
   const isHost = room.hostUserId === session.userId;
@@ -47,22 +47,10 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
   const activeRules = (room.activeRules ?? []) as string[];
   const eliminationCount = room.eliminationCount ?? 0;
 
-  // Detect rule-intro round: round deadline is longer than the normal round duration
-  // (we give 1 min for rule intros vs. the configured timer)
-  const normalRoundMs = (room.roundDuration ?? 30) * 1000;
-  const isRuleIntroRound = !!currentRound?.submissionDeadline &&
-    (new Date(currentRound.submissionDeadline).getTime() - currentRound.createdAt.getTime()) > normalRoundMs + 5000;
-
-  // Derive the newest unlocked rule (last element of activeRules)
+  // The newest unlocked rule — the one this intro round is giving players time to read.
   const newRuleId = isRuleIntroRound && activeRules.length > 0
     ? activeRules[activeRules.length - 1]
     : null;
-
-  // Overlay props — pass all eliminated players; GameOverlays uses eliminationCount
-  // to detect WHEN new eliminations happen (avoids false triggers on page load)
-  const eliminatedPlayers = players
-    .filter(p => p.isEliminated)
-    .map(p => ({ username: p.username, score: p.score }));
 
   // Balance scale winner side: based on winner position in sorted breakdown
   const sortedBreakdown = currentResult
@@ -79,21 +67,20 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
 
       {/* ── Client-side overlays (elimination, rule announcement, game clear) ── */}
       <GameOverlays
-        newlyEliminated={eliminatedPlayers}
+        newlyEliminated={newlyEliminated}
         eliminationCount={eliminationCount}
         newRuleId={newRuleId}
-        deadlineIso={currentRound?.submissionDeadline?.toISOString() ?? null}
         isRuleIntroRound={isRuleIntroRound}
         isFinished={room.status === "finished"}
         winnerUsername={winner?.username ?? null}
         winnerScore={winner?.score ?? null}
         isWinnerMe={winner?.userId === session.userId}
+        roundsPlayed={room.currentRound}
       />
       {room.status === "active" && currentRound?.submissionDeadline && (
         <RoundBanner
           roundNumber={room.currentRound}
-          submissionDeadline={currentRound.submissionDeadline.toISOString()}
-          roundDurationSecs={room.roundDuration}
+          roundStartedAt={currentRound.createdAt.toISOString()}
         />
       )}
 
@@ -140,7 +127,7 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
               💀 {eliminationCount}
             </span>
           )}
-          <RulesDrawer activeRules={activeRules} eliminationCount={eliminationCount} />
+          <RulesDrawer activeRules={activeRules} eliminationCount={eliminationCount} eliminationScore={room.eliminationScore} />
         </div>
       </nav>
 
@@ -231,20 +218,25 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
                       {row.isWinner && !row.isExactMatch && !row.isDuplicatePenalty && <span className="ml-2 text-xs text-emerald-400">👑 Closest</span>}
                     </span>
                     <span className="font-mono text-sm font-bold text-zinc-300 min-w-[2.5rem] text-center">
-                      {row.value < 0 ? <span className="text-zinc-600 text-xs">skip</span> : row.value}
+                      {row.value}
                     </span>
                     <span className="font-mono text-xs text-zinc-600 hidden sm:block min-w-[4rem] text-right">
-                      Δ {row.value >= 0 && row.deviation != null ? row.deviation.toFixed(2) : "—"}
+                      Δ {row.deviation != null ? row.deviation.toFixed(2) : "—"}
                     </span>
+                    {/*
+                      A delta of 0 means "you survived this round", which is the
+                      best outcome in the game. It used to render as the literal
+                      string "-0", so the winner's row looked like a penalty.
+                    */}
                     <span className={`font-black font-mono text-base min-w-[3.5rem] text-right
-                      ${(row.scoreDelta ?? 0) > 0 ? "text-emerald-400" : (row.scoreDelta ?? 0) === 0 ? "text-zinc-400" : "text-red-400"}`}>
-                      {(row.scoreDelta ?? 0) > 0 ? `+${row.scoreDelta}` : row.scoreDelta === 0 ? "-0" : row.scoreDelta}
+                      ${(row.scoreDelta ?? 0) === 0 ? "text-emerald-400" : "text-red-400"}`}>
+                      {(row.scoreDelta ?? 0) === 0 ? "\u00b10" : `\u2212${Math.abs(row.scoreDelta ?? 0)}`}
                     </span>
                   </div>
                 ))}
               </div>
 
-              <p className="text-xs text-zinc-700">Winner ±0 · Loser −1 · Exact match (Rule 2) −2 · Duplicate (Rule 1) −1 · Miss = 0 counted as guess</p>
+              <p className="text-xs text-zinc-600">Winner ±0 · Everyone else −1 · Exact match (Rule 2) −2 · Duplicate (Rule 1) −1 · No answer counts as a guess of 0</p>
 
               {currentResult.resolvedAt && (
                 <ResultTimer resolvedAt={currentResult.resolvedAt.toISOString()} roomId={roomId} resultDisplayMs={20000} />
@@ -284,63 +276,44 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
                     </div>
 
                     {/* ── Full Rules Overview ── */}
-                    <RulesOverview />
+                    <RulesOverview eliminationScore={room.eliminationScore} roundDuration={room.roundDuration} />
 
                     {isHost ? (
                       <div className="space-y-4">
-                        <p className="text-sm text-zinc-400">
-                          You are the <span className="text-yellow-400 font-semibold">host</span>.
-                          Needs ≥ 2 players — bots auto-fill if short.
-                        </p>
-
-                        <div className="rounded-xl bg-zinc-950/50 border border-white/5 p-4 space-y-3">
-                          <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Game Settings</p>
-                          <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-1">
-                              <Label htmlFor="elimScore" className="text-xs text-zinc-400">Elimination Score</Label>
-                              <select id="elimScore" name="elimScore" form="start-form"
-                                className="w-full bg-zinc-900 border border-white/10 text-white rounded-md px-3 py-2 text-sm" defaultValue="-10">
-                                <option value="-3">−3 (Fast)</option>
-                                <option value="-5">−5 (Normal)</option>
-                                <option value="-10">−10 (Standard)</option>
-                                <option value="-15">−15 (Long)</option>
-                                <option value="-20">−20 (Marathon)</option>
-                              </select>
-                            </div>
-                            <div className="space-y-1">
-                              <Label htmlFor="roundDur" className="text-xs text-zinc-400">Round Timer</Label>
-                              <select id="roundDur" name="roundDuration" form="start-form"
-                                className="w-full bg-zinc-900 border border-white/10 text-white rounded-md px-3 py-2 text-sm" defaultValue="30">
-                                <option value="15">15s</option>
-                                <option value="30">30s (Default)</option>
-                                <option value="45">45s</option>
-                                <option value="60">60s</option>
-                              </select>
-                            </div>
-                          </div>
-                        </div>
-
-                        <form id="start-form" action={async (fd: FormData) => {
-                          "use server";
-                          const elimScore = parseInt(fd.get("elimScore") as string) || -10;
-                          const roundDur = parseInt(fd.get("roundDuration") as string) || 30;
-                          const { db: dbClient } = await import("@/db");
-                          const { gameRooms: gr } = await import("@/db/schema");
-                          const { eq: eqFn } = await import("drizzle-orm");
-                          await dbClient.update(gr).set({ eliminationScore: elimScore, roundDuration: roundDur }).where(eqFn(gr.id, roomId));
-                          await startGame(roomId, room.hostUserId);
-                        }}>
-                          <Button type="submit" size="lg" className="w-full bg-red-600 hover:bg-red-500 text-white font-bold text-base h-12 shadow-[0_0_20px_rgba(220,38,38,0.25)]">
-                            ▶ Start Game
-                          </Button>
-                        </form>
-
+                        <GameSettingsPanel
+                          roomId={roomId}
+                          eliminationScore={room.eliminationScore}
+                          roundDuration={room.roundDuration}
+                        />
+                        <Separator className="bg-white/5" />
                         <AddBotsButton roomId={roomId} />
-                        <p className="text-xs text-zinc-700">AI bots pick random 0–100 (different each round)</p>
+                        <p className="text-xs text-zinc-600">
+                          Each bot plays one of eight strategies — from near-Nash lowballers to
+                          contrarians who chase the extremes — and keeps it for the whole game.
+                        </p>
                       </div>
                     ) : (
-                      <div className="rounded-xl border border-blue-500/20 bg-blue-950/20 p-4 text-sm text-blue-300">
-                        Waiting for <strong>{players.find(p => p.userId === room.hostUserId)?.username ?? "host"}</strong> to start…
+                      <div className="space-y-3">
+                        <div className="rounded-xl border border-blue-500/20 bg-blue-950/20 p-4 text-sm text-blue-300">
+                          Waiting for <strong>{players.find(p => p.userId === room.hostUserId)?.username ?? "host"}</strong> to start…
+                        </div>
+                        {/*
+                          Non-hosts could not see the settings at all before, so
+                          they joined without knowing how punishing the game was
+                          going to be. The host's choices now save on change, so
+                          this is always current.
+                        */}
+                        <div className="flex flex-wrap gap-2 text-xs">
+                          <span className="rounded-full border border-white/10 bg-zinc-900 px-3 py-1 text-zinc-400">
+                            Eliminated at <strong className="font-mono text-red-400">{room.eliminationScore}</strong>
+                          </span>
+                          <span className="rounded-full border border-white/10 bg-zinc-900 px-3 py-1 text-zinc-400">
+                            <strong className="font-mono text-sky-300">{room.roundDuration}s</strong> per round
+                          </span>
+                          <span className="rounded-full border border-white/10 bg-zinc-900 px-3 py-1 text-zinc-400">
+                            <strong className="font-mono text-zinc-200">{players.length}</strong> / {room.maxPlayers} players
+                          </span>
+                        </div>
                       </div>
                     )}
                   </>
@@ -359,7 +332,11 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
                     <div className="flex items-start gap-5 flex-wrap sm:flex-nowrap">
                       {currentRound.submissionDeadline && (
                         <div className="flex flex-col items-center gap-1">
-                          <CountdownTimer deadline={currentRound.submissionDeadline.toISOString()} roomId={roomId} />
+                          <CountdownTimer
+                            deadline={currentRound.submissionDeadline.toISOString()}
+                            startedAt={currentRound.createdAt.toISOString()}
+                            roomId={roomId}
+                          />
                           {isRuleIntroRound && (
                             <span className="text-[10px] text-orange-400 font-semibold tracking-wider">1-MIN RULE INTRO</span>
                           )}
@@ -368,10 +345,8 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
                       <div className="flex-1 min-w-0">
                         {me && !me.isEliminated && !iHaveSubmitted && (
                           <GuessForm
-                            playerId={me.id}
                             roundId={currentRound.id}
                             roomId={roomId}
-                            activeRules={activeRules}
                             activePlayers={players.filter(p => !p.isEliminated).length}
                           />
                         )}
@@ -421,7 +396,7 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
                     {isHost && (
                       <>
                         <Separator className="bg-white/5" />
-                        <form action={async () => { "use server"; await resolveCurrentRound(roomId); }}>
+                        <form action={forceResolveAction.bind(null, roomId)}>
                           <Button type="submit" variant="ghost" className="w-full text-zinc-600 hover:text-white hover:bg-white/5 text-xs">
                             ⏭ Force Resolve (Host)
                           </Button>
@@ -492,7 +467,7 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
                         </div>
                         {guessVal !== undefined && (
                           <span className="text-xs font-mono text-zinc-600">
-                            {guessVal < 0 ? "skipped" : `→ ${guessVal}`}
+                            → {guessVal}
                           </span>
                         )}
                         {!showingResults && room.status === "active" && !p.isEliminated && guessVal === undefined && (
@@ -504,14 +479,18 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
                       <div className="flex items-center gap-1 flex-shrink-0">
                         {p.isWinner && <span className="text-yellow-400">🏆</span>}
                         {p.isEliminated && <span className="text-xs text-red-700 font-bold">OUT</span>}
+                        {/*
+                          Scores only ever fall: the best round result is 0.
+                          The old "+score" branch was unreachable, and colouring
+                          0 as neutral grey hid the one genuinely good state.
+                        */}
                         <span className={`text-sm font-bold font-mono min-w-[2.5rem] text-right
-                          ${p.score < 0 ? "text-red-400" : p.score === 0 ? "text-zinc-400" : "text-emerald-400"}`}>
-                          {p.score > 0 ? `+${p.score}` : p.score}
+                          ${p.score === 0 ? "text-emerald-400" : p.score <= room.eliminationScore ? "text-red-500" : "text-red-400"}`}>
+                          {p.score === 0 ? "0" : `\u2212${Math.abs(p.score)}`}
                         </span>
                         {canKick && (
                           <form action={kickPlayer}>
                             <input type="hidden" name="targetPlayerId" value={p.id} />
-                            <input type="hidden" name="hostUserId" value={session.userId} />
                             <input type="hidden" name="roomId" value={roomId} />
                             <button type="submit" title={`Kick ${p.username}`}
                               className="opacity-0 group-hover:opacity-100 transition-opacity text-zinc-700 hover:text-red-400 hover:bg-red-950/40 rounded p-1 text-xs ml-1">

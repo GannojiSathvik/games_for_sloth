@@ -9,11 +9,15 @@ interface Props {
   winnerUsername: string;
   winnerScore: number;
   isMe: boolean;
+  /** Rounds played before the game ended. */
+  roundsPlayed: number;
+  /** How many players were knocked out along the way. */
+  eliminationCount: number;
 }
 
 const CONFETTI_COLORS = ["#ffd700", "#ff4500", "#00ff88", "#00cfff", "#ff69b4", "#ffb347"];
 
-export default memo(function GameClearScreen({ winnerUsername, winnerScore, isMe }: Props) {
+export default memo(function GameClearScreen({ winnerUsername, winnerScore, isMe, roundsPlayed, eliminationCount }: Props) {
   // Confetti burst on mount — DOM injection, no state
   useEffect(() => {
     const particles: HTMLElement[] = [];
@@ -73,36 +77,42 @@ export default memo(function GameClearScreen({ winnerUsername, winnerScore, isMe
           </p>
         </div>
 
-        {/* Stats */}
-        <div className="kod-victory-in flex gap-8 mt-2" style={{ animationDelay: "700ms" }}>
+        {/*
+          Stats. "Survived" used to render a literal ♦ with no number behind it
+          — a stat tile with no stat. These three are the facts the game
+          actually knows when it ends.
+        */}
+        <div className="kod-victory-in mt-2 flex items-stretch gap-6 sm:gap-8" style={{ animationDelay: "700ms" }}>
           <div className="text-center">
-            <p className="text-zinc-600 text-xs uppercase tracking-widest">Final Score</p>
-            <p className={`text-3xl font-black font-mono ${winnerScore < 0 ? "text-red-400" : "text-emerald-400"}`}>
-              {winnerScore > 0 ? `+${winnerScore}` : winnerScore}
+            <p className="text-xs uppercase tracking-widest text-zinc-600">Final Score</p>
+            <p className={`font-mono text-3xl font-black ${winnerScore < 0 ? "text-red-400" : "text-emerald-400"}`}>
+              {winnerScore === 0 ? "0" : `\u2212${Math.abs(winnerScore)}`}
             </p>
           </div>
           <div className="w-px bg-white/10" />
           <div className="text-center">
-            <p className="text-zinc-600 text-xs uppercase tracking-widest">Survived</p>
-            <p className="text-3xl font-black text-zinc-300">♦</p>
+            <p className="text-xs uppercase tracking-widest text-zinc-600">Rounds</p>
+            <p className="font-mono text-3xl font-black text-zinc-200">{roundsPlayed}</p>
+          </div>
+          <div className="w-px bg-white/10" />
+          <div className="text-center">
+            <p className="text-xs uppercase tracking-widest text-zinc-600">Knocked out</p>
+            <p className="font-mono text-3xl font-black text-red-400">{eliminationCount}</p>
           </div>
         </div>
 
-        {/* Actions */}
-        <div className="kod-victory-in flex gap-3 mt-4 flex-wrap justify-center" style={{ animationDelay: "900ms" }}>
+        {/*
+          One action, not two. "New Game" and "Go Home" were both plain links to
+          "/" — the same destination behind two different promises, which makes
+          a player hesitate over a choice that does not exist.
+        */}
+        <div className="kod-victory-in mt-4 flex justify-center" style={{ animationDelay: "900ms" }}>
           <Link
             href="/"
-            className="px-8 py-3 rounded-xl bg-yellow-500 hover:bg-yellow-400 text-black font-black text-base
-                       transition-all hover:shadow-[0_0_20px_rgba(234,179,8,0.5)] active:scale-95"
+            className="rounded-xl bg-yellow-500 px-8 py-3 text-base font-black text-black
+                       transition-all hover:bg-yellow-400 hover:shadow-[0_0_20px_rgba(234,179,8,0.5)] active:scale-95"
           >
-            New Game
-          </Link>
-          <Link
-            href="/"
-            className="px-8 py-3 rounded-xl border border-white/20 text-zinc-300 hover:text-white font-semibold
-                       hover:bg-white/5 transition-all active:scale-95"
-          >
-            Go Home
+            Play again
           </Link>
         </div>
       </div>

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { X, HelpCircle, AlertTriangle, Target, ShieldAlert, Swords } from "lucide-react";
+import { useEffect, useState } from "react";
+import { X, HelpCircle, Target, ShieldAlert, Swords } from "lucide-react";
 
 const ALL_RULES = [
   {
@@ -11,8 +11,8 @@ const ALL_RULES = [
     unlockAt: 1,
     unlockLabel: "After 1st elimination",
     color: "orange",
-    description: "If 2 or more players choose the same number, that number is INVALID. All those players lose -1 and are excluded from winning. Normal scoring applies to the rest.",
-    example: "Guesses: 23, 23, 45 → 23 is invalid. Both players with 23 get -1. Player with 45 wins (-0).",
+    description: "If 2 or more players choose the same number, that number is INVALID. All those players lose −1 and are excluded from winning. Normal scoring applies to the rest.",
+    example: "Guesses: 23, 23, 45 → 23 is invalid. Both players with 23 get −1. Player with 45 wins (±0).",
   },
   {
     id: "exact_penalty",
@@ -21,8 +21,8 @@ const ALL_RULES = [
     unlockAt: 2,
     unlockLabel: "After 2nd elimination",
     color: "red",
-    description: "If any player guesses the EXACT target number, all OTHER players lose -2 instead of -1. The exact match winner still gets -0.",
-    example: "Target: 23.2 ≈ 23. Player with 23 wins (-0). All others lose -2.",
+    description: "If any player guesses the EXACT target number, all OTHER players lose −2 instead of −1. The exact match winner still gets ±0.",
+    example: "Target: 23.2 ≈ 23. Player with 23 wins (±0). All others lose −2.",
   },
   {
     id: "zero_hundred",
@@ -42,8 +42,25 @@ const COLORS = {
   purple: { ring: "border-purple-500/40", bg: "bg-purple-950/20", icon: "bg-purple-500/20 text-purple-400", badge: "bg-purple-500/20 text-purple-300 border-purple-500/30" },
 };
 
-export default function RulesDrawer({ activeRules, eliminationCount }: { activeRules: string[]; eliminationCount: number }) {
+export default function RulesDrawer({
+  activeRules,
+  eliminationCount,
+  eliminationScore,
+}: {
+  activeRules: string[];
+  eliminationCount: number;
+  /** The host-chosen score a player is knocked out at. Not always −10. */
+  eliminationScore: number;
+}) {
   const [isOpen, setIsOpen] = useState(false);
+
+  // Escape closes the drawer — the expected way out of any overlay.
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setIsOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isOpen]);
 
   const nextUnlock = ALL_RULES.find(r => !activeRules.includes(r.id));
 
@@ -69,8 +86,18 @@ export default function RulesDrawer({ activeRules, eliminationCount }: { activeR
         />
       )}
 
+      {/*
+        The panel stays mounted so it can slide rather than pop, but a closed
+        panel must not be reachable: it used to sit off-screen and still take
+        keyboard focus, so tabbing through the room wandered into an invisible
+        drawer. `inert` takes it out of the tab order and the accessibility
+        tree, and `pointer-events-none` stops the off-screen edge swallowing
+        clicks near the right margin.
+      */}
       <div
-        className={`fixed inset-y-0 right-0 z-[401] w-full max-w-sm bg-zinc-950 border-l border-white/10 transform transition-transform duration-300 ease-out shadow-2xl flex flex-col ${isOpen ? "translate-x-0" : "translate-x-full"}`}
+        {...(isOpen ? {} : { inert: "" as unknown as boolean })}
+        aria-hidden={!isOpen}
+        className={`fixed inset-y-0 right-0 z-[401] w-full max-w-sm bg-zinc-950 border-l border-white/10 transform transition-transform duration-300 ease-out shadow-2xl flex flex-col ${isOpen ? "translate-x-0" : "translate-x-full pointer-events-none"}`}
       >
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-white/10">
@@ -150,11 +177,11 @@ export default function RulesDrawer({ activeRules, eliminationCount }: { activeR
             <div className="space-y-1.5">
               <div className="flex justify-between text-sm">
                 <span className="text-zinc-400">👑 Winner (closest)</span>
-                <span className="text-zinc-400 font-mono font-bold">-0</span>
+                <span className="text-emerald-400 font-mono font-bold">±0</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-zinc-400">Others</span>
-                <span className="text-red-400 font-mono font-bold">-1</span>
+                <span className="text-red-400 font-mono font-bold">−1</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-zinc-400">Miss (timer out)</span>
@@ -164,7 +191,8 @@ export default function RulesDrawer({ activeRules, eliminationCount }: { activeR
             <div className="mt-3 pt-3 border-t border-white/5">
               <div className="flex justify-between text-sm">
                 <span className="text-zinc-500">Elimination threshold</span>
-                <span className="text-red-400 font-mono font-bold">≤ -10 points</span>
+                {/* Read from the room, not hardcoded — the host picks this. */}
+                <span className="text-red-400 font-mono font-bold">≤ {eliminationScore} points</span>
               </div>
             </div>
           </div>

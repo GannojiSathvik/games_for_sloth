@@ -26,9 +26,9 @@ const RULE_DATA: Record<string, {
       glow: "shadow-[0_0_60px_rgba(249,115,22,0.3)]",
       text: "text-orange-400",
     },
-    description: "If 2 or more players choose the same number, that number is INVALID. Those players lose -1 and are excluded from winning.",
-    example: "Guesses: 23, 23, 45 → 23 is invalid. Both players with 23 get -1. Player with 45 wins (-0).",
-    scoring: "Duplicates: -1 (invalid) · Remaining: normal scoring",
+    description: "If 2 or more players choose the same number, that number is INVALID. Those players lose −1 and are excluded from winning.",
+    example: "Guesses: 23, 23, 45 → 23 is invalid. Both players with 23 get −1. Player with 45 wins (±0).",
+    scoring: "Duplicates: −1 (invalid) · Remaining: normal scoring",
   },
   exact_penalty: {
     name: "Rule 2: Double Penalty",
@@ -41,9 +41,9 @@ const RULE_DATA: Record<string, {
       glow: "shadow-[0_0_60px_rgba(239,68,68,0.3)]",
       text: "text-red-400",
     },
-    description: "If any player guesses the EXACT target number, all OTHER players lose -2 instead of -1. The exact match winner gets -0.",
-    example: "Target: 23.2 ≈ 23. Player with 23 wins (-0). All others lose -2 instead of -1.",
-    scoring: "Exact winner: -0 · All others: -2",
+    description: "If any player guesses the EXACT target number, all OTHER players lose −2 instead of −1. The exact match winner gets ±0.",
+    example: "Target: 23.2 ≈ 23. Player with 23 wins (±0). All others lose −2 instead of −1.",
+    scoring: "Exact winner: ±0 · All others: −2",
   },
   zero_hundred: {
     name: "Rule 3: Zero/Hundred Override",
@@ -58,7 +58,7 @@ const RULE_DATA: Record<string, {
     },
     description: "ONLY when 2 players remain. You MUST pick 0, 1, or 100 — no other numbers allowed. Rock-paper-scissors rules decide the winner: 100 beats 0 · 0 beats 1 · 1 beats 100. Picking the same number = tie (both lose −1).",
     example: "Player A picks 0, Player B picks 100 → Player B wins (100 beats 0). Player A loses −1. If both pick 1 → tie, both lose −1.",
-    scoring: "RPS Winner: +0 · Loser: −1 · Tie (same pick): −1 each",
+    scoring: "RPS winner: ±0 · Loser: −1 · Tie (same pick): −1 each",
   },
 };
 

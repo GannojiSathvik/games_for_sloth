@@ -4,13 +4,13 @@
 import { useActionState, useEffect, useRef, useCallback, memo, useState } from "react";
 import { submitGuessAction } from "@/actions/game-actions";
 
-interface Props { playerId: string; roundId: string; roomId: string; activeRules?: string[]; activePlayers?: number; }
+interface Props { roundId: string; roomId: string; activePlayers?: number; }
 const initialState = { success: false, error: undefined as string | undefined };
 
 // ── Memoised Number Pad ───────────────────────────────────────────────────────
-interface PadProps { value: string; disabled: boolean; onDigit(d: number): void; onClear(): void; onSubmit(): void; }
+interface PadProps { value: string; disabled: boolean; onDigit(d: number): void; onBackspace(): void; onClear(): void; onSubmit(): void; }
 
-const NumberPad = memo(function NumberPad({ value, disabled, onDigit, onClear, onSubmit }: PadProps) {
+const NumberPad = memo(function NumberPad({ value, disabled, onDigit, onBackspace, onClear, onSubmit }: PadProps) {
   const btnRefs = useRef<Record<number, HTMLButtonElement | null>>({});
 
   const fireRipple = (n: number) => {
@@ -53,21 +53,34 @@ const NumberPad = memo(function NumberPad({ value, disabled, onDigit, onClear, o
         ))}
       </div>
 
-      {/* Action row */}
-      <div className="grid grid-cols-2 gap-3">
-        <button type="button" onClick={onClear}
+      {/*
+        Action row. The left button used to be labelled "⌫ Clear" and wiped the
+        whole entry — so mistyping the second digit of "45" cost you both. ⌫ now
+        does what the glyph says and deletes one digit; Clear is its own button
+        for wiping the lot.
+      */}
+      <div className="grid grid-cols-4 gap-2">
+        <button type="button" onClick={onBackspace}
           disabled={disabled || value === ""}
-          className="h-12 rounded-xl border border-white/10 bg-zinc-900 text-zinc-400 font-semibold text-sm
+          aria-label="Delete last digit"
+          className="h-12 rounded-xl border border-white/10 bg-zinc-900 text-zinc-300 font-semibold text-lg
                      hover:bg-zinc-800 hover:text-white active:scale-95
                      disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-75">
-          ⌫ Clear
+          ⌫
+        </button>
+        <button type="button" onClick={onClear}
+          disabled={disabled || value === ""}
+          className="h-12 rounded-xl border border-white/10 bg-zinc-900 text-zinc-400 font-semibold text-xs
+                     hover:bg-zinc-800 hover:text-white active:scale-95
+                     disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-75">
+          Clear
         </button>
         <button type="button" onClick={onSubmit}
           disabled={disabled || value === ""}
-          className="h-12 rounded-xl bg-red-600 hover:bg-red-500 text-white font-black text-base
+          className="col-span-2 h-12 rounded-xl bg-red-600 hover:bg-red-500 text-white font-black text-base
                      shadow-[0_0_20px_rgba(220,38,38,0.35)] hover:shadow-[0_0_30px_rgba(220,38,38,0.55)]
                      active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-75">
-          Submit ♦
+          {disabled ? "Submitting…" : "Submit ♦"}
         </button>
       </div>
     </div>
@@ -227,14 +240,14 @@ const RpsPad = memo(function RpsPad({ selected, disabled, onSelect, onSubmit }: 
             : "1px solid rgba(255,255,255,0.07)",
         }}
       >
-        {selected !== "" ? `Submit ${selected} ♦` : "Tap a bubble first"}
+        {disabled ? "Submitting…" : selected !== "" ? `Submit ${selected} ♦` : "Tap a bubble first"}
       </button>
     </div>
   );
 }, (prev, next) => prev.disabled === next.disabled && prev.selected === next.selected);
 
 // ── Main GuessForm ────────────────────────────────────────────────────────────
-export default function GuessForm({ playerId, roundId, roomId, activeRules = [], activePlayers = 99 }: Props) {
+export default function GuessForm({ roundId, roomId, activePlayers = 99 }: Props) {
   // RPS bubble mode: whenever exactly 2 players remain, force 0/1/100 picks.
   // This is independent of whether Rule 3 is formally "unlocked".
   const isRpsMode = activePlayers === 2;
@@ -258,7 +271,8 @@ export default function GuessForm({ playerId, roundId, roomId, activeRules = [],
     });
   }, []);
 
-  const handleClear  = useCallback(() => setValue(""), []);
+  const handleClear     = useCallback(() => setValue(""), []);
+  const handleBackspace = useCallback(() => setValue(prev => prev.slice(0, -1)), []);
 
   const handleSubmit = useCallback(() => {
     const n = parseInt(value, 10);
@@ -273,19 +287,47 @@ export default function GuessForm({ playerId, roundId, roomId, activeRules = [],
     setValue(String(v));
   }, []);
 
-  // Keyboard support — no re-renders, reads latest value via closure
+  // Keyboard support.
+  //
+  // This listens on `window` so a player can just start typing without first
+  // clicking the pad. That makes it a page-wide handler, which needs two
+  // guards it did not have:
+  //
+  //  • Ignore keys aimed at a real form control. Otherwise typing a room code
+  //    or a bot count anywhere on the page would also be feeding the pad, and
+  //    Backspace inside a text field would be swallowed here.
+  //  • Ignore modified keys, so Cmd/Ctrl+R still reloads and Cmd+1 still
+  //    switches browser tabs instead of typing a 1.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (isPending || state.success) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      const target = e.target as HTMLElement | null;
+      if (target?.isContentEditable) return;
+      const tag = target?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
       if (!isRpsMode) {
-        if (e.key >= "0" && e.key <= "9") appendDigit(parseInt(e.key, 10));
-        if (e.key === "Backspace") handleClear();
+        if (e.key >= "0" && e.key <= "9") {
+          appendDigit(parseInt(e.key, 10));
+        } else if (e.key === "Backspace") {
+          // The browser treats Backspace outside a field as "go back" in some
+          // configurations — not something to trigger mid-round.
+          e.preventDefault();
+          handleBackspace();
+        } else if (e.key === "Escape") {
+          handleClear();
+        }
       }
-      if (e.key === "Enter") handleSubmit();
+      if (e.key === "Enter") {
+        e.preventDefault();
+        handleSubmit();
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [isPending, state.success, appendDigit, handleClear, handleSubmit, isRpsMode]);
+  }, [isPending, state.success, appendDigit, handleBackspace, handleClear, handleSubmit, isRpsMode]);
 
   if (state.success) {
     return (
@@ -301,7 +343,6 @@ export default function GuessForm({ playerId, roundId, roomId, activeRules = [],
 
   return (
     <form ref={formRef} action={formAction} className="space-y-4">
-      <input type="hidden" name="playerId" value={playerId} />
       <input type="hidden" name="roundId"  value={roundId}  />
       <input type="hidden" name="roomId"   value={roomId}   />
       <input type="hidden" name="guess"    defaultValue=""  />
@@ -318,6 +359,7 @@ export default function GuessForm({ playerId, roundId, roomId, activeRules = [],
           value={value}
           disabled={isPending}
           onDigit={appendDigit}
+          onBackspace={handleBackspace}
           onClear={handleClear}
           onSubmit={handleSubmit}
         />
@@ -325,7 +367,7 @@ export default function GuessForm({ playerId, roundId, roomId, activeRules = [],
 
       {!isRpsMode && (
         <p className="text-xs text-zinc-700 text-center">
-          Target = 80% of average · Closest wins · Type or click pad
+          Target = 80% of average · Closest wins · Type digits, ⌫ to delete, Enter to submit
         </p>
       )}
 

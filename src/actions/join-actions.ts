@@ -5,35 +5,9 @@ import { db } from "@/db";
 import { gameRooms, players, users } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import { getSession, setSession } from "@/lib/session";
-import { nanoid } from "nanoid";
+import { createFreshUser, normaliseUsername } from "@/lib/username";
+import { assertRoomHasSpace } from "@/lib/room-capacity";
 import { revalidatePath } from "next/cache";
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────────────
-
-/** Create a fresh user. If the exact username is globally taken, append a short suffix. */
-async function createFreshUser(desiredUsername: string) {
-  // Try the exact username first
-  const exact = await db.insert(users)
-    .values({ username: desiredUsername, isAi: false })
-    .onConflictDoNothing()
-    .returning();
-
-  if (exact.length > 0) return exact[0];
-
-  // Username is globally taken — append suffix until we get a unique one
-  for (let i = 0; i < 5; i++) {
-    const candidate = `${desiredUsername}_${nanoid(3)}`;
-    const result = await db.insert(users)
-      .values({ username: candidate, isAi: false })
-      .onConflictDoNothing()
-      .returning();
-    if (result.length > 0) return result[0];
-  }
-
-  throw new Error(`Could not create user "${desiredUsername}" — please try a different name.`);
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // joinByLinkAction — called by the username form on the invite-link join page
@@ -47,13 +21,13 @@ async function createFreshUser(desiredUsername: string) {
 // ─────────────────────────────────────────────────────────────────────────────
 export async function joinByLinkAction(formData: FormData) {
   const roomId  = formData.get("roomId") as string;
-  const rawName = (formData.get("username") as string | null)?.trim();
+  const rawName = normaliseUsername(formData.get("username"));
 
   if (!roomId) throw new Error("Room ID missing.");
-  if (!rawName) throw new Error("Please enter a username.");
 
   const [room] = await db.select().from(gameRooms).where(eq(gameRooms.id, roomId)).limit(1);
   if (!room) throw new Error("Room not found.");
+  if (room.status === "finished") throw new Error("This game has already finished.");
 
   const existingSession = await getSession();
 
@@ -90,6 +64,7 @@ export async function joinByLinkAction(formData: FormData) {
   }
 
   // Add to room (idempotent)
+  await assertRoomHasSpace(roomId, userId, room.maxPlayers);
   await db.insert(players)
     .values({ userId, roomId })
     .onConflictDoNothing();
@@ -108,6 +83,13 @@ export async function sessionJoinAction(formData: FormData) {
   const session = await getSession();
   if (!session) redirect(`/join/${roomId}`);
 
+  // Check the room first — otherwise a stale link fails as a raw foreign-key
+  // error instead of a message the player can act on.
+  const [room] = await db.select().from(gameRooms).where(eq(gameRooms.id, roomId)).limit(1);
+  if (!room) throw new Error("Room not found.");
+  if (room.status === "finished") throw new Error("This game has already finished.");
+
+  await assertRoomHasSpace(roomId, session.userId, room.maxPlayers);
   await db.insert(players)
     .values({ userId: session.userId, roomId })
     .onConflictDoNothing();

@@ -49,7 +49,83 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   PALETTE — dark by default.
+
+   This app is a dark game: every surface is a near-black panel with a red
+   accent. The tokens below used to hold shadcn's LIGHT defaults, and the
+   `.dark` class that held the dark ones was never applied to <html> by
+   anything. So `--card-foreground` resolved to near-black while every panel
+   was painted dark by hand, and each component had to carry its own
+   `text-white` to stay readable. Anything that forgot rendered black on black.
+
+   Making dark the default in :root is what the app always meant. Each token is
+   tuned to the zinc/red surfaces the game already uses, so the primitives and
+   the hand-painted panels finally agree. `.light` is kept as an escape hatch in
+   case a printable or high-contrast view is ever wanted.
+   ───────────────────────────────────────────────────────────────────────────── */
+
 :root {
+  --radius: 0.625rem;
+
+  /* Base surfaces — near-black with a faint warm cast, not pure #000, so the
+     stacked panels and glows have something to separate against. */
+  --background: oklch(0.145 0.004 285);
+  --foreground: oklch(0.97 0 0);
+
+  /* Panels: the zinc-900-ish surface every Card in the game sits on. */
+  --card: oklch(0.205 0.005 285);
+  --card-foreground: oklch(0.97 0 0);
+  --popover: oklch(0.205 0.005 285);
+  --popover-foreground: oklch(0.97 0 0);
+
+  /* Primary is the game's red — the Start / Submit accent. */
+  --primary: oklch(0.58 0.22 27);
+  --primary-foreground: oklch(0.99 0 0);
+
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.97 0 0);
+
+  /* Muted carries the secondary copy: readable on dark, clearly not primary. */
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.97 0 0);
+
+  --destructive: oklch(0.63 0.21 25);
+
+  /* Hairlines. The game draws these as white/10 by hand; matching that here
+     means a bare primitive lands on the same line weight. */
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.58 0.22 27 / 60%);
+
+  --chart-1: oklch(0.63 0.21 25);
+  --chart-2: oklch(0.72 0.17 60);
+  --chart-3: oklch(0.79 0.16 86);
+  --chart-4: oklch(0.7 0.15 162);
+  --chart-5: oklch(0.62 0.19 260);
+
+  --sidebar: oklch(0.205 0.005 285);
+  --sidebar-foreground: oklch(0.97 0 0);
+  --sidebar-primary: oklch(0.58 0.22 27);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.97 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.58 0.22 27 / 60%);
+}
+
+/* `.dark` is aliased to the default so any `dark:` variant in a shadcn
+   primitive still resolves the way its author intended. */
+.dark {
+  color-scheme: dark;
+}
+
+/* Escape hatch — not used by any screen today. */
+.light {
+  color-scheme: light;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -68,64 +144,58 @@
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-}
-
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
+
+  html {
+    /* Tells the browser to paint its own chrome dark too: form controls, the
+       scrollbar, and the overscroll area past the top and bottom of the page,
+       which used to flash white on a rubber-band scroll. */
+    color-scheme: dark;
+    @apply font-sans;
+  }
+
   body {
     @apply bg-background text-foreground;
+    /* Belt and braces: pages paint their own background over this, but if one
+       is ever shorter than the viewport the gap must not be white. */
+    background-color: var(--background);
   }
-  html {
-    @apply font-sans;
+
+  /* A visible focus ring on every interactive element. The game is heavily
+     keyboard-driven (the number pad takes digits and Enter), so keyboard users
+     need to see where they are. `:focus-visible` keeps it off mouse clicks. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   REDUCED MOTION
+
+   This screen is busy: confetti, floating diamonds, pulsing rings, an acid
+   pour, a tipping scale, cards sliding in. For someone with vestibular motion
+   sensitivity that is not decoration, it is a problem — and the OS already
+   knows, via prefers-reduced-motion.
+
+   Everything is collapsed to a near-instant step rather than removed, because
+   several animations use `forwards` to hold their END state (the results cards
+   fade in and stay). Setting `animation: none` would leave those stuck at
+   opacity 0 — visually deleting the results — so the animation still runs,
+   just too fast to register as movement.
+   ───────────────────────────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

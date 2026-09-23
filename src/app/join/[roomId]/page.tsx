@@ -137,6 +137,7 @@ export default async function JoinPage({
               placeholder="e.g. Alex, Player1…"
               defaultValue={prefillUsername}
               required
+              maxLength={24}
               autoComplete="off"
               className="bg-zinc-800 border-white/10 text-white placeholder:text-zinc-600 h-12 text-base focus-visible:ring-red-500"
             />
